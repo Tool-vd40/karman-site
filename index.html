@@ -92,8 +92,6 @@
   /* Первый экран */
   .hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: center; padding-block: 72px 88px; }
   .hero h1 { font-size: clamp(30px, 3.4vw, 50px); margin: 20px 0 24px; }
-  .hero .lead { font-size: 19px; color: var(--dim); }
-  .hero .lead b { color: var(--text); font-weight: 500; }
   .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 32px; margin-top: 32px; }
   /* Две кнопки первого экрана одной ширины, одна под другой */
   .hero .cta { display: grid; grid-template-columns: max-content; gap: 12px; }
@@ -689,7 +687,6 @@
     <div>
       <p class="label">Karman <span id="ver">1.3.1</span> для macOS 13+</p>
       <h1>Скопировали и потеряли? Оно в кармане</h1>
-      <p class="lead">Karman живёт в строке меню и хранит всё, что вы копировали: текст, ссылки, скриншоты. <b>Панель ниже работает</b>: в ней можно искать и копировать.</p>
       <div class="cta">
         <a class="dl" href="https://github.com/Tool-vd40/karman/releases/latest/download/Karman.dmg"><span class="dl-text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M6 10l6 6 6-6M4 21h16"/></svg>Скачать для Mac</span><span class="dl-fill" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M6 10l6 6 6-6M4 21h16"/></svg>Скачать для Mac</span><span class="dl-bar" aria-hidden="true"></span></a>
         <a class="btn" href="https://t.me/Stack_Tools">
