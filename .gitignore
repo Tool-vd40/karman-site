@@ -1,0 +1,12 @@
+# Рабочие файлы, которые не нужны сайту
+.idea/
+.playwright-mcp/
+index.js
+package.json
+node_modules/
+variants/
+.DS_Store
+# Полноразмерные скриншоты: на сайте используются уменьшенные img/shot-*.jpg
+img/panel.png
+img/phone.png
+img/settings.png

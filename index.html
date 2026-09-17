@@ -1,0 +1,1605 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Karman</title>
+<meta name="description" content="Karman: история буфера обмена, карман для скриншотов, исправление раскладки и связь с телефоном. Бесплатно для Mac.">
+<link rel="icon" href="img/icon.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Karman: буфер обмена для Mac">
+<meta property="og:description" content="История буфера, карман для скриншотов, исправление раскладки двойным Shift и история на телефоне. Бесплатно.">
+<meta property="og:url" content="https://tool-vd40.github.io/karman-site/">
+<meta property="og:image" content="https://tool-vd40.github.io/karman-site/img/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geologica:wght@200..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" integrity="sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<style>
+  /* Палитра Karman: графит с фиолетовым оттенком и акцент из иконки приложения.
+     Контраст по WCAG AA: текст 15.9:1, приглушённый 7.2:1, текст на акценте 5.25:1. */
+  :root {
+    --bg: #131219;
+    --surface: #1b1a24;
+    --line: #363447;
+    --text: #eeecf5;
+    --dim: #a19fb3;
+    --accent: #8b6cff;
+    --accent-hover: #9d83ff;
+    --on-accent: #0e0c16;
+    --desk: #1f1e29;
+    --desk-bar: #2a2936;
+    --key: #eeecf5;
+    --key-edge: #7d7a93;
+    --karman: #5b3bf5;
+    --mac-panel: #2c2b31;
+    /* Geologica: мягкая геометрия, близкая к системному шрифту Mac, одна семья на заголовки и текст */
+    --display: Geologica, -apple-system, system-ui, sans-serif;
+    --dw: 800;
+    --track: -.035em;
+    --sans: Geologica, -apple-system, system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--text); font: 400 17px/1.6 var(--sans); overflow-x: hidden; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  a { color: inherit; }
+  img { max-width: 100%; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding-inline: 24px; }
+  h1, h2 { font-family: var(--display); font-weight: var(--dw); letter-spacing: var(--track); line-height: 1.02; text-wrap: balance; }
+  h2 { font-size: clamp(32px, 4.6vw, 60px); max-width: 16ch; }
+  h3 { font-weight: 600; font-size: 20px; line-height: 1.3; }
+  p { max-width: 62ch; }
+  .dim { color: var(--dim); }
+  .label { font: 500 14px/1 var(--mono); color: var(--dim); }
+  kbd { font: 500 .85em var(--mono); padding: .1em .45em; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); white-space: nowrap; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    height: 54px; padding: 0 24px; border-radius: 4px;
+    font: 600 16px/1 var(--sans); text-decoration: none; white-space: nowrap;
+    border: 1px solid var(--line); transition: background-color .15s ease, border-color .15s ease, transform .16s var(--ease-out);
+  }
+  .btn:active { transform: scale(.97); }
+  .btn svg { transition: transform .25s var(--ease-out); }
+  /* Наведение: иконка подсказывает, что будет после нажатия */
+  @media (hover: hover) and (pointer: fine) {
+    .btn:hover .ic-tg { transform: translate(2px, -2px); }
+  }
+  .btn:hover { border-color: var(--text); }
+  .btn-go { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .btn-go:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn svg { width: 18px; height: 18px; flex: none; }
+
+  /* Шапка */
+  .top {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+    background: var(--bg); border-bottom: 1px solid var(--line);
+  }
+  .top .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; font: var(--dw) 17px var(--display); }
+  .plate { display: grid; place-items: center; width: 34px; height: 34px; border: 1.5px solid var(--text); border-radius: 4px; font: var(--dw) 13px var(--display); letter-spacing: -.04em; }
+  .brand small { font: 400 13px var(--mono); color: var(--dim); }
+  .top nav { margin-left: auto; display: flex; gap: 24px; font-size: 15px; }
+  .top nav a { text-decoration: none; color: var(--dim); }
+  .top nav a:hover { color: var(--text); }
+  .top .btn { height: 38px; padding: 0 14px; font-size: 14px; }
+
+  /* Первый экран */
+  .hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: center; padding-block: 72px 88px; }
+  .hero h1 { font-size: clamp(30px, 3.4vw, 50px); margin: 20px 0 24px; }
+  .hero .lead { font-size: 19px; color: var(--dim); }
+  .hero .lead b { color: var(--text); font-weight: 500; }
+  .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 32px; margin-top: 32px; }
+  /* Две кнопки первого экрана одной ширины, одна под другой */
+  .hero .cta { display: grid; grid-template-columns: max-content; gap: 12px; }
+  .under { margin-top: 16px; font: 400 13px var(--mono); color: var(--dim); }
+
+  /* Рабочий стол с живой панелью */
+  .desk { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--desk); }
+  .desk-bg {
+    position: relative; min-height: 520px; padding: 20px;
+  }
+  .menubar { display: flex; align-items: center; gap: 18px; height: 30px; padding: 0 14px; background: var(--desk-bar); font: 500 13px -apple-system, system-ui, sans-serif; color: var(--text); }
+  .menubar .grow { margin-left: auto; }
+  .mb-btn { all: unset; cursor: pointer; display: grid; place-items: center; width: 30px; height: 22px; border-radius: 5px; }
+  .mb-btn[aria-expanded="true"] { background: color-mix(in srgb, var(--text) 18%, transparent); }
+  .mb-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .mb-btn svg { width: 16px; height: 16px; }
+
+  .panel {
+    position: absolute; top: 10px; right: 64px; width: min(380px, calc(100% - 40px));
+    background: var(--mac-panel); color: #f1f0f4; border-radius: 14px; padding: 12px;
+    border: 1px solid rgba(255,255,255,.12);
+    font-family: -apple-system, system-ui, sans-serif;
+    /* translate отдельно от transform: сдвиг при перетаскивании не мешает анимации открытия */
+    translate: var(--dx, 0px) var(--dy, 0px);
+    transform-origin: 85% 0; transition: transform .35s cubic-bezier(.3, 1.3, .5, 1), opacity .18s;
+    animation: drop .5s cubic-bezier(.3, 1.3, .5, 1) .55s both;
+  }
+  @keyframes drop { from { transform: translateY(-14px) scale(.92); opacity: 0; } }
+  .panel.closed { transform: translateY(-10px) scale(.9); opacity: 0; visibility: hidden; }
+  .grab-zone { margin: -12px -12px 4px; padding: 10px 0 8px; cursor: grab; touch-action: none; border-radius: 14px 14px 0 0; }
+  .grab-zone:active, .panel.dragging .grab-zone { cursor: grabbing; }
+  .panel.dragging { transition: none; }
+  .grip { width: 36px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.25); margin: 0 auto; transition: background-color .15s ease, width .2s var(--ease-out); }
+  .grab-zone:hover .grip, .panel.dragging .grip { background: rgba(255,255,255,.55); width: 48px; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; background: rgba(255,255,255,.08); border-radius: 7px; padding: 2px; }
+  .tabs button { all: unset; cursor: pointer; text-align: center; padding: 4px; border-radius: 5px; font-size: 13px; }
+  .tabs button[aria-selected="true"] { background: rgba(255,255,255,.22); }
+  .tabs button:focus-visible { outline: 2px solid var(--accent); }
+  .search { width: 100%; margin: 10px 0 6px; padding: 6px 10px; border-radius: 6px; border: 0; background: rgba(255,255,255,.07); box-shadow: 0 0 0 2px #3d7bd9; color: #fff; font: 13px -apple-system, system-ui, sans-serif; }
+  .search::placeholder { color: rgba(255,255,255,.62); }
+  .search:focus { outline: none; }
+  .search:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+  .list { list-style: none; padding: 0; max-height: 330px; overflow-y: auto; }
+  .row { all: unset; box-sizing: border-box; cursor: pointer; width: 100%; display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; padding: 8px 10px; border-radius: 7px; font-size: 14px; line-height: 1.35; }
+  .row:hover, .row:focus-visible { background: var(--karman); outline: none; }
+  .row .ic { width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; font: 600 11px var(--sans); color: #fff; margin-top: 1px; }
+  .row small { display: block; margin-top: 2px; font-size: 11px; color: rgba(255,255,255,.62); }
+  .row:hover small { color: rgba(255,255,255,.8); }
+  .row.fresh { animation: fresh 1.4s ease-out; }
+  @keyframes fresh { from { background: var(--karman); } }
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .shots .row { display: block; padding: 6px; }
+  /* Нарисованные «снимки» вместо скриншотов с личными данными */
+  .mock { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 5px; }
+  .mock-design { background:
+      linear-gradient(#8b6cff, #8b6cff) 12% 22% / 46% 10% no-repeat,
+      linear-gradient(#d9d6f5, #d9d6f5) 12% 42% / 70% 6% no-repeat,
+      linear-gradient(#d9d6f5, #d9d6f5) 12% 54% / 56% 6% no-repeat,
+      linear-gradient(#5b3bf5, #5b3bf5) 12% 78% / 28% 12% no-repeat,
+      linear-gradient(#eeeef3, #eeeef3) 0 0 / 100% 12% no-repeat, #fff; }
+  .mock-chart { background:
+      linear-gradient(#8b6cff, #8b6cff) 16% 100% / 12% 40% no-repeat,
+      linear-gradient(#8b6cff, #8b6cff) 36% 100% / 12% 62% no-repeat,
+      linear-gradient(#8b6cff, #8b6cff) 56% 100% / 12% 48% no-repeat,
+      linear-gradient(#5b3bf5, #5b3bf5) 76% 100% / 12% 80% no-repeat, #1f1e29; }
+  .shots img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 5px; background: #fff; }
+  .empty { padding: 20px 10px; text-align: center; font-size: 13px; color: rgba(255,255,255,.5); }
+  .toast { position: absolute; left: 50%; bottom: 12px; translate: -50% 0; padding: 6px 14px; border-radius: 999px; background: #000; font-size: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; white-space: nowrap; }
+  .toast.show { opacity: 1; }
+  .desk-hint { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 20px; padding: 12px 16px; border-top: 1px solid var(--line); font: 400 13px var(--mono); color: var(--dim); }
+
+  /* Лента примеров: единственное жёлтое пятно на своём экране */
+  .tape { background: var(--accent); color: var(--on-accent); overflow: hidden; white-space: nowrap; padding: 14px 0; font: var(--dw) 18px var(--display); }
+  .tape div { display: inline-block; animation: run 45s linear infinite; }
+  .tape:hover div { animation-play-state: paused; }
+  .tape span { margin-right: 48px; }
+  .tape s { opacity: .45; margin-right: 10px; font-weight: 400; }
+  @keyframes run { to { transform: translateX(-50%); } }
+
+  .sec { padding-block: 112px; border-bottom: 1px solid var(--line); }
+  .sec-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px 48px; align-items: end; margin-bottom: 56px; }
+  .sec-head p { font-size: 19px; color: var(--dim); }
+
+  /* Раскладка */
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* Заголовок исправляет себя: тонкие серые буквы с волнистым подчёркиванием становятся жирными.
+     Вес меняется плавно, потому что Geologica вариативный. */
+  .fix-line .wd { white-space: nowrap; }
+  .fix-line .ch { display: inline-block; transition: font-weight .6s var(--ease-out), color .6s ease; }
+  .self-fix.bad .ch:not(.ok) { font-weight: 200; color: var(--dim); text-decoration: underline wavy #ff6b6b 2px; text-underline-offset: .12em; text-decoration-skip-ink: none; }
+  .fix-line .ch.ok { animation: okflash 1.2s var(--ease-out); }
+  @keyframes okflash { from { color: var(--accent); } }
+
+  .demo { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden; }
+
+  /* Лента: фраза набирается, Shift нажимается дважды, текст расшифровывается и уезжает вверх */
+  .stream { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 32px; align-items: center; padding: 40px; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .rows { display: grid; gap: 10px; min-width: 0; }
+  .rows.up { animation: rows-up .5s var(--ease-out); }
+  @keyframes rows-up { from { transform: translateY(28px); opacity: .4; } }
+  .row-prev, .row-next { font: 400 16px var(--mono); color: var(--dim); min-height: 1.6em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-prev s { opacity: .6; margin-right: 10px; }
+  .row-prev b { color: var(--text); font-weight: 500; }
+  .row-next { opacity: .55; }
+  .row-cur { font: var(--dw) clamp(28px, 4.2vw, 54px)/1.15 var(--display); letter-spacing: var(--track); min-height: 1.15em; overflow-wrap: anywhere; }
+  .row-cur .nz { color: var(--accent); font-weight: 300; }
+  .row-cur.done { animation: okflash 1.2s var(--ease-out); }
+  .caret { display: inline-block; width: 3px; height: .85em; background: currentColor; margin-left: 4px; vertical-align: -.06em; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* Клавиши в духе Raycast: объём, при нажатии клавиша опускается и подсвечивается */
+  .keys { display: flex; gap: 12px; }
+  .kc {
+    all: unset; box-sizing: border-box; cursor: pointer; min-width: 120px; height: 68px; padding: 0 16px;
+    display: grid; place-items: center; border-radius: 10px;
+    background: linear-gradient(#2c2a36, #24222d); border: 1px solid #3f3c52;
+    box-shadow: 0 5px 0 #0b0a10, inset 0 1px 0 rgba(255,255,255,.08);
+    font: 500 15px var(--mono); color: var(--text);
+    transition: transform .08s ease-out, box-shadow .08s ease-out, border-color .2s ease, color .2s ease;
+  }
+  span.kc { cursor: default; }
+  .kc:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+  .kc.down { transform: translateY(4px); box-shadow: 0 1px 0 #0b0a10, inset 0 1px 0 rgba(255,255,255,.08); border-color: var(--accent); color: var(--accent); }
+
+  .demo-screen { padding: 32px 40px 36px; }
+  .try-title { font-size: 17px; margin-bottom: 12px; }
+  .try { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: center; }
+  .try input {
+    width: 100%; min-width: 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg);
+    color: var(--text); font: 500 clamp(18px, 2vw, 24px)/1.3 var(--display);
+    transition: color .3s ease, border-color .2s ease;
+  }
+  .try input::placeholder { color: var(--dim); font-weight: 400; }
+  .try input:focus { outline: none; border-color: var(--accent); }
+  .try input.fixed { color: var(--accent); }
+  .try-note { margin-top: 14px; font-size: 15px; color: var(--dim); min-height: 1.6em; }
+  .try-note s { opacity: .7; }
+  .try-note b { color: var(--text); font-weight: 600; }
+  .modes { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); }
+  .mode { padding: 28px 40px; }
+  .mode + .mode { border-left: 1px solid var(--line); }
+  .mode p { color: var(--dim); margin-top: 8px; }
+  .more { margin-top: 32px; padding: 0; border: 1px solid var(--line); border-radius: 8px; }
+  .more summary { cursor: pointer; padding: 18px 24px; font-weight: 600; list-style-position: inside; }
+  .more summary:hover { color: var(--accent); }
+  .more[open] summary { border-bottom: 1px solid var(--line); }
+  .more .facts { margin: 0; padding: 24px; }
+  .facts { margin-top: 48px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px; list-style: none; padding: 0; }
+  .facts li { color: var(--dim); font-size: 15px; }
+  .facts b { display: block; color: var(--text); font-weight: 600; margin-bottom: 6px; font-size: 17px; }
+
+  /* Телефон */
+  .steps { list-style: none; padding: 0; counter-reset: s; display: grid; gap: 0; }
+  .steps li { counter-increment: s; display: grid; grid-template-columns: 56px 1fr; gap: 16px; padding: 24px 0; border-top: 1px solid var(--line); }
+  .steps li::before { content: counter(s); font: var(--dw) 28px/1 var(--display); color: var(--dim); }
+  .steps p { color: var(--dim); margin-top: 4px; }
+  .steps-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 32px; margin-top: 40px; }
+  .shortcut { margin-top: 8px; color: var(--dim); font-size: 15px; }
+  .shortcut b { color: var(--text); font-weight: 600; }
+
+  /* Mac и телефон рядом: записи перелетают по дуге Wi-Fi в обе стороны */
+  .duo-stage { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 40px; }
+  .duo-hint { margin-top: 20px; font-size: 15px; color: var(--dim); }
+  .duo { display: grid; grid-template-columns: minmax(0, 1fr) 200px auto; align-items: center; gap: 12px; }
+  .mac { border-radius: 14px; background: var(--mac-panel); border: 1px solid rgba(255,255,255,.12); font-family: -apple-system, system-ui, sans-serif; color: #f1f0f4; overflow: hidden; }
+  .mac-bar { display: flex; align-items: center; gap: 7px; padding: 10px 14px; background: var(--desk-bar); font-size: 13px; }
+  .mac-bar i { width: 11px; height: 11px; border-radius: 50%; background: #ff5f57; }
+  .mac-bar i:nth-child(2) { background: #febc2e; } .mac-bar i:nth-child(3) { background: #28c840; }
+  .mac-bar b { margin-left: 8px; font-weight: 600; }
+  .mlist { list-style: none; padding: 10px; }
+  .mlist button { all: unset; box-sizing: border-box; cursor: pointer; width: 100%; display: block; padding: 9px 12px; border-radius: 8px; font-size: 14px; }
+  .mlist button:hover, .mlist button:focus-visible { background: var(--karman); outline: none; }
+  .mlist small { display: block; font-size: 11px; color: rgba(255,255,255,.62); }
+  .link { position: relative; width: 200px; height: 90px; }
+  .link svg { width: 200px; height: 90px; overflow: visible; }
+  .dot { position: absolute; left: 0; top: 0; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 16px var(--accent); offset-path: path("M10 70 Q100 -20 190 70"); offset-rotate: 0deg; opacity: 0; }
+  .wifi { position: absolute; left: 0; right: 0; bottom: -6px; text-align: center; font: 400 12px var(--mono); color: var(--dim); }
+  .flyer { position: fixed; z-index: 50; pointer-events: none; padding: 8px 12px; border-radius: 10px; background: var(--karman); color: #fff; font: 13px -apple-system, system-ui, sans-serif; white-space: nowrap; box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+  .ph { width: 250px; flex: none; border-radius: 40px; padding: 10px; background: #0c0d0f; border: 1px solid var(--line); }
+  .scr { position: relative; height: 480px; border-radius: 31px; overflow: hidden; background: #f2f2f7; color: #111; font-family: -apple-system, system-ui, sans-serif; display: flex; flex-direction: column; }
+  .notch { flex: none; width: 84px; height: 24px; border-radius: 12px; background: #0c0d0f; margin: 9px auto 4px; }
+  .scr h4 { font-size: 22px; font-weight: 700; padding: 4px 16px 8px; }
+  .plist { list-style: none; padding: 0 10px; flex: 1; overflow: hidden; }
+  .plist li { background: #fff; border-radius: 11px; padding: 8px 11px; margin-bottom: 7px; font-size: 13px; line-height: 1.3; }
+  .plist small { display: block; font-size: 10.5px; color: #626268; margin-top: 1px; }
+  .plist .ph-own { background: var(--karman); color: #fff; }
+  .plist .ph-own small { color: rgba(255,255,255,.75); }
+  .arrive { animation: arrive .45s var(--ease-out); }
+  @keyframes arrive { from { opacity: 0; transform: translateY(-8px) scale(.97); } }
+  .compose { flex: none; display: flex; gap: 6px; padding: 8px 10px 14px; background: #fff; border-top: 1px solid #e0e0e6; }
+  .compose input { flex: 1; min-width: 0; border: 1px solid #d8d8de; border-radius: 16px; padding: 7px 12px; font: 16px -apple-system, system-ui, sans-serif; color: #111; background: #fff; }
+  .compose input:focus { outline: 2px solid var(--karman); outline-offset: 0; }
+  .compose button { all: unset; cursor: pointer; width: 34px; height: 34px; border-radius: 50%; background: var(--karman); color: #fff; display: grid; place-items: center; font-size: 17px; }
+  .compose button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Мелочи */
+  /* Мелочи: у каждой плитки своя сцена на маленьком экране Mac. Размеры в cqw/cqh от сцены,
+     анимация идёт, только пока сцена на экране (класс .play). */
+  .scene { position: relative; aspect-ratio: 16 / 10; container-type: size; overflow: hidden; border-radius: 10px; background: var(--desk); border: 1px solid var(--line); font-family: -apple-system, system-ui, sans-serif; }
+  .scene * { position: absolute; animation-duration: 4.5s; animation-iteration-count: infinite; animation-timing-function: var(--ease-out); }
+  .scene:not(.play) * { animation-play-state: paused; }
+  .mb { left: 0; right: 0; top: 0; height: 9%; background: var(--desk-bar); }
+  .mb-ic { right: 6%; top: 18%; width: 4.5cqw; height: 64%; border-radius: 1cqw; background: var(--karman); }
+  .mp { background: var(--mac-panel); border: 1px solid rgba(255,255,255,.12); border-radius: 1.4cqw; }
+  .lines { left: 6%; right: 6%; top: 8%; bottom: 6%; }
+  .rw { position: relative; height: 18%; margin-bottom: 5%; border-radius: .8cqw; background: #3a3940; display: block; }
+  .rw::after { content: ""; position: absolute; left: 8%; top: 38%; width: 60%; height: 24%; border-radius: 1cqw; background: rgba(255,255,255,.28); }
+  .cur { left: 0; top: 0; width: 3.4cqw; height: 5cqw; }
+  .cur svg { position: static; width: 100%; height: 100%; display: block; }
+  .tag { font: 500 2.4cqw var(--mono); color: var(--text); background: #000; border-radius: 99px; padding: .6cqw 1.8cqw; white-space: nowrap; }
+  .lbl { font-size: 2.6cqw; color: var(--dim); white-space: nowrap; }
+
+  /* 1. Карман скриншотов */
+  .s1 .mp { right: 5%; top: 14%; width: 34%; height: 78%; }
+  .s1 .slots { left: 7%; right: 7%; top: 6%; bottom: 6%; }
+  .s1 .slot { position: relative; display: block; height: 22%; margin-bottom: 6%; border-radius: .8cqw; background: #3a3940; }
+  .s1 .slot.new { background: linear-gradient(135deg, #8b6cff, #5b3bf5); animation-name: s1-slot; }
+  .s1 .shot { left: 10%; top: 40%; width: 34%; height: 30%; border-radius: .8cqw; border: .4cqw solid #fff; background: linear-gradient(160deg, #3b3752 0 45%, #2a2838 45%); animation-name: s1-shot; }
+  .s1 .flash { inset: 0; background: #fff; opacity: 0; animation-name: s1-flash; animation-timing-function: ease-out; }
+  .s1 .lbl { left: 6%; bottom: 7%; animation-name: s1-lbl; }
+  @keyframes s1-shot { 0% { opacity: 0; transform: scale(.94); } 10%, 40% { opacity: 1; transform: none; } 66% { opacity: 1; transform: translate(50cqw, -30cqh) scale(.8); } 70%, 100% { opacity: 0; transform: translate(50cqw, -30cqh) scale(.8); } }
+  @keyframes s1-flash { 0%, 8% { opacity: 0; } 10% { opacity: .45; } 18%, 100% { opacity: 0; } }
+  @keyframes s1-slot { 0%, 64% { opacity: 0; transform: scale(.8); } 72%, 100% { opacity: 1; transform: none; } }
+  @keyframes s1-lbl { 0%, 70% { opacity: 0; } 78%, 96% { opacity: 1; } 100% { opacity: 0; } }
+
+  /* 2. Несколько записей сразу */
+  .s2 .mp { left: 8%; top: 14%; width: 50%; height: 78%; }
+  .s2 .r1 { animation-name: s2-hl; }
+  .s2 .r3 { animation-name: s2-hl3; }
+  .s2 .chat { right: 5%; top: 26%; width: 28%; height: 44%; border-radius: 1.6cqw; background: #26252f; border: 1px dashed rgba(255,255,255,.2); }
+  .s2 .chat .lbl { left: 10%; top: 8%; }
+  .s2 .count { left: 50%; top: 55%; translate: -50% -50%; animation-name: s2-count; }
+  .s2 .fly { left: 12%; top: 50%; width: 40%; height: 16%; border-radius: .8cqw; background: var(--karman); box-shadow: 1.2cqw -1.2cqw 0 #7a5cff; animation-name: s2-fly; }
+  .s2 .cur { animation-name: s2-cur; }
+  .s2 .cmd { left: 3.4cqw; top: 3.6cqw; font: 600 2.4cqw -apple-system, system-ui, sans-serif; background: var(--text); color: #000; border-radius: .6cqw; padding: .2cqw .8cqw; animation-name: s2-cmd; animation-duration: inherit; }
+  @keyframes s2-hl { 0%, 17% { background: #3a3940; } 20%, 86% { background: var(--karman); } 92%, 100% { background: #3a3940; } }
+  @keyframes s2-hl3 { 0%, 34% { background: #3a3940; } 37%, 86% { background: var(--karman); } 92%, 100% { background: #3a3940; } }
+  @keyframes s2-cur { 0% { transform: translate(70cqw, 82cqh); } 15%, 21% { transform: translate(34cqw, 24cqh); } 18% { transform: translate(34cqw, 24cqh) scale(.8); } 32%, 50% { transform: translate(34cqw, 55cqh); } 35% { transform: translate(34cqw, 55cqh) scale(.8); } 75%, 100% { transform: translate(82cqw, 44cqh); } }
+  @keyframes s2-cmd { 0%, 8% { opacity: 0; } 12%, 42% { opacity: 1; } 46%, 100% { opacity: 0; } }
+  @keyframes s2-fly { 0%, 48% { opacity: 0; transform: none; } 52% { opacity: 1; transform: none; } 75% { opacity: 1; transform: translate(46cqw, -10cqh) scale(.6); } 79%, 100% { opacity: 0; transform: translate(46cqw, -10cqh) scale(.6); } }
+  @keyframes s2-count { 0%, 76% { opacity: 0; transform: scale(.6); } 82%, 94% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+
+  /* 3. Крупный просмотр */
+  .s3 .mp { left: 8%; top: 14%; width: 44%; height: 78%; }
+  .s3 .r2 { background: var(--karman); }
+  .s3 .space { right: 7%; bottom: 8%; width: 26%; height: 14%; border-radius: 1.2cqw; display: grid; place-items: center; font: 500 2.6cqw var(--mono); color: var(--text); background: linear-gradient(#2c2a36, #24222d); border: 1px solid #3f3c52; box-shadow: 0 .8cqw 0 #0b0a10; animation-name: s3-key; animation-timing-function: ease-out; }
+  .s3 .pv { left: 30%; top: 14%; width: 62%; height: 64%; border-radius: 1.6cqw; background: linear-gradient(160deg, #8b6cff, #3a2a9e); border: 1px solid rgba(255,255,255,.2); transform-origin: 0 30%; animation-name: s3-pv; }
+  .s3 .pv i { left: 10%; right: 30%; height: 6%; border-radius: 1cqw; background: rgba(255,255,255,.6); }
+  .s3 .pv i:nth-child(1) { top: 60%; } .s3 .pv i:nth-child(2) { top: 74%; right: 50%; }
+  @keyframes s3-key { 0%, 20%, 28%, 76%, 84%, 100% { transform: none; box-shadow: 0 .8cqw 0 #0b0a10; border-color: #3f3c52; } 23%, 79% { transform: translateY(.7cqw); box-shadow: 0 .1cqw 0 #0b0a10; border-color: #8b6cff; } }
+  @keyframes s3-pv { 0%, 24% { opacity: 0; transform: scale(.25); } 34%, 78% { opacity: 1; transform: none; } 86%, 100% { opacity: 0; transform: scale(.25); } }
+
+  /* 4. Файл на значок */
+  .s4 .mb-ic { animation-name: s4-ic; }
+  .s4 .doc { left: 14%; top: 56%; width: 11%; height: 26%; border-radius: .6cqw; background: #eeecf5; animation-name: s4-doc; }
+  .s4 .doc b { left: 0; right: 0; bottom: 14%; text-align: center; font: 700 2.4cqw var(--mono); color: #c03; }
+  .s4 .cur { animation-name: s4-cur; }
+  .s4 .badge { right: 3.5%; top: 1%; min-width: 3cqw; height: 3cqw; border-radius: 99px; background: #ff5a5f; color: #fff; font: 700 1.9cqw var(--mono); display: grid; place-items: center; padding: 0 .6cqw; animation-name: s4-badge; }
+  .s4 .mp { right: 3%; top: 12%; width: 42%; height: 30%; animation-name: s4-drop; transform-origin: 90% 0; }
+  .s4 .mp .rw { position: absolute; left: 6%; right: 6%; top: 18%; height: 36%; background: var(--karman); }
+  .s4 .mp .lbl { left: 8%; bottom: 10%; color: var(--text); }
+  @keyframes s4-doc { 0% { opacity: 0; transform: none; } 6%, 22% { opacity: 1; transform: none; } 55% { opacity: 1; transform: translate(69cqw, -64cqh) scale(.35); } 58%, 100% { opacity: 0; transform: translate(69cqw, -64cqh) scale(.35); } }
+  @keyframes s4-cur { 0% { transform: translate(40cqw, 92cqh); } 14%, 22% { transform: translate(21cqw, 70cqh); } 55% { transform: translate(90cqw, 6cqh); } 100% { transform: translate(90cqw, 6cqh); } }
+  @keyframes s4-ic { 0%, 56% { transform: none; } 60% { transform: scale(1.35); } 68%, 100% { transform: none; } }
+  @keyframes s4-badge { 0%, 58% { opacity: 0; transform: scale(.4); } 63%, 94% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+  @keyframes s4-drop { 0%, 66% { opacity: 0; transform: scale(.85); } 72%, 94% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+
+  /* 5. Панель там, где удобно */
+  .s5 .mp, .s5 .ghost { left: 8%; top: 18%; width: 34%; height: 68%; }
+  .s5 .mp { animation-name: s5-panel; }
+  .s5 .handle { left: 38%; right: 38%; top: 4%; height: 3%; border-radius: 1cqw; background: rgba(255,255,255,.35); }
+  .s5 .mp .lines { top: 14%; }
+  .s5 .ghost { border: .3cqw dashed rgba(255,255,255,.25); border-radius: 1.4cqw; animation-name: s5-ghost; }
+  .s5 .cur { animation-name: s5-cur; }
+  .s5 .tag { right: 6%; bottom: 7%; animation-name: s5-tag; }
+  @keyframes s5-panel { 0%, 20% { opacity: 1; transform: none; } 55%, 92% { opacity: 1; transform: translateX(50cqw); } 97% { opacity: 0; transform: translateX(50cqw); } 98% { opacity: 0; transform: none; } 100% { opacity: 1; transform: none; } }
+  @keyframes s5-ghost { 0%, 20% { opacity: 0; } 26%, 90% { opacity: 1; } 96%, 100% { opacity: 0; } }
+  @keyframes s5-cur { 0% { transform: translate(60cqw, 84cqh); } 16%, 20% { transform: translate(24cqw, 20cqh); } 55% { transform: translate(74cqw, 20cqh); } 72%, 100% { transform: translate(86cqw, 64cqh); } }
+  @keyframes s5-tag { 0%, 60% { opacity: 0; transform: translateY(1cqh); } 66%, 92% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+
+  /* 6. Русский и английский */
+  .s6 .mp { left: 22%; right: 22%; top: 14%; height: 62%; }
+  .s6 .seg { left: 6%; right: 6%; top: 8%; height: 14%; border-radius: 1cqw; background: rgba(255,255,255,.08); }
+  .s6 .seg::before { content: ""; position: absolute; left: 2%; top: 8%; bottom: 8%; width: 47%; border-radius: .8cqw; background: rgba(255,255,255,.2); }
+  .s6 .w { font-size: 2.8cqw; color: var(--text); white-space: nowrap; }
+  .s6 .ru { animation-name: s6-ru; }
+  .s6 .en { animation-name: s6-en; opacity: 0; }
+  .s6 .t1 { left: 12%; top: 18%; } .s6 .t2 { left: 60%; top: 18%; }
+  .s6 .t3 { left: 9%; top: 34%; color: var(--dim); }
+  .s6 .box { left: 6%; right: 6%; top: 32%; height: 13%; border-radius: .8cqw; border: .3cqw solid #3d7bd9; }
+  .s6 .mp .rw { position: absolute; left: 6%; right: 6%; height: 14%; }
+  .s6 .k1 { top: 52%; } .s6 .k2 { top: 72%; }
+  .s6 .sys { left: 50%; bottom: 7%; translate: -50% 0; }
+  .s6 .sys span { position: relative; }
+  .s6 .sys .en { position: absolute; left: 0; top: 0; }
+  @keyframes s6-ru { 0%, 42% { opacity: 1; filter: none; } 50%, 92% { opacity: 0; filter: blur(.6cqw); } 100% { opacity: 1; filter: none; } }
+  @keyframes s6-en { 0%, 42% { opacity: 0; filter: blur(.6cqw); } 50%, 92% { opacity: 1; filter: none; } 100% { opacity: 0; filter: blur(.6cqw); } }
+
+  /* Уменьшенное движение: сцена стоит на самом понятном кадре */
+  @media (prefers-reduced-motion: reduce) {
+    .scene * { animation-play-state: paused !important; animation-delay: var(--freeze) !important; }
+  }
+  .s1 { --freeze: -3.4s; } .s2 { --freeze: -3.6s; } .s3 { --freeze: -2.25s; }
+  .s4 { --freeze: -3.4s; } .s5 { --freeze: -3.15s; } .s6 { --freeze: -.9s; }
+
+  .small { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .tile { border: 1px solid var(--line); border-radius: 12px; padding: 14px 14px 22px; background: var(--surface); }
+  .tile .scene { margin-bottom: 16px; }
+  .tile h3, .tile p { padding-inline: 8px; }
+  .tile p { color: var(--dim); font-size: 15px; margin-top: 6px; }
+
+  /* Приватность */
+
+  /* Установка */
+  /* Установка: лента из четырёх шагов сверху, под ней шаг, который можно пройти руками */
+  .tl-wrap { position: relative; margin-bottom: 20px; }
+  .tl-line { position: absolute; left: 12.5%; right: 12.5%; top: 22px; height: 2px; background: var(--line); }
+  .tl-line i { position: absolute; inset: 0; background: var(--accent); transform-origin: 0 50%; transform: scaleX(0); transition: transform .6s var(--ease-out); }
+  .tl { position: relative; list-style: none; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .tl button { all: unset; box-sizing: border-box; cursor: pointer; width: 100%; display: grid; justify-items: center; text-align: center; gap: 4px; padding: 0 6px 10px; border-radius: 8px; }
+  .tl button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tl .dotn { width: 44px; height: 44px; margin-bottom: 8px; border-radius: 50%; display: grid; place-items: center; background: var(--bg); border: 2px solid var(--line); font-weight: 800; color: var(--dim); transition: border-color .2s ease, color .2s ease, background-color .2s ease; }
+  .tl b { font-weight: 600; font-size: 17px; line-height: 1.3; color: var(--dim); }
+  .tl small { font-size: 14px; color: var(--dim); }
+  .tl button[aria-current="step"] .dotn { border-color: var(--accent); color: var(--accent); }
+  .tl button[aria-current="step"] b { color: var(--text); }
+  .tl button.done .dotn { background: #34c759; border-color: #34c759; color: #06290f; }
+  .tl button.done .dotn span { display: none; }
+  .tl button.done .dotn::after { content: "✓"; }
+  .panes { position: relative; min-height: 380px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; padding: 32px 24px; overflow: hidden; }
+  .pane { display: none; width: 100%; justify-items: center; gap: 18px; }
+  .pane.on { display: grid; animation: pane-in .35s var(--ease-out); }
+  @keyframes pane-in { from { opacity: 0; transform: translateY(8px); } }
+  .say { font-size: 15px; color: var(--dim); text-align: center; min-height: 1.6em; max-width: 56ch; }
+  .say b { color: var(--text); }
+  .alt { all: unset; cursor: pointer; font-size: 14px; color: var(--dim); text-decoration: underline; text-underline-offset: 3px; }
+  .alt:hover { color: var(--text); }
+  .alt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .req { font: 400 14px var(--mono); color: var(--dim); text-align: center; }
+  /* Макеты окон macOS */
+  .win { border-radius: 12px; background: var(--mac-panel); border: 1px solid rgba(255,255,255,.12); font-family: -apple-system, system-ui, sans-serif; color: #f1f0f4; overflow: hidden; }
+  .win-bar { display: flex; align-items: center; gap: 7px; padding: 9px 12px; background: var(--desk-bar); font-size: 13px; }
+  .win-bar i { width: 11px; height: 11px; border-radius: 50%; background: #ff5f57; }
+  .win-bar i:nth-child(2) { background: #febc2e; } .win-bar i:nth-child(3) { background: #28c840; }
+  .win-bar b { flex: 1; text-align: center; font-weight: 600; margin-right: 50px; }
+  .appicon { position: relative; display: block; width: 76px; aspect-ratio: 1; border-radius: 22%; background: linear-gradient(160deg, #6f52ff, #3a16d8); box-shadow: 0 8px 20px rgba(40, 20, 140, .45); }
+  .appicon::before, .appicon::after { content: ""; position: absolute; left: 22%; width: 56%; height: 38%; border-radius: 12%; }
+  .appicon::before { top: 34%; background: rgba(255,255,255,.55); transform: translate(6%, 10%); }
+  .appicon::after { top: 26%; background: #fff; }
+  .folder { position: relative; width: 84px; height: 66px; border-radius: 8px; background: linear-gradient(#63b4ff, #2e84ee); margin-top: 8px; }
+  .folder::before { content: ""; position: absolute; left: 0; top: -8px; width: 38%; height: 14px; border-radius: 6px 6px 0 0; background: #4aa2fb; }
+  .folder::after { content: "A"; position: absolute; inset: 0; display: grid; place-items: center; font: 800 26px -apple-system, system-ui, sans-serif; color: rgba(255,255,255,.55); }
+  .cap { font-size: 12px; text-align: center; margin-top: 8px; color: #f1f0f4; }
+  .dmg { width: min(460px, 100%); }
+  .dmg-body { position: relative; height: 190px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; justify-items: center; padding: 16px; background: linear-gradient(#34333b, #2a2930); }
+  .drag { position: relative; z-index: 2; cursor: grab; touch-action: none; }
+  .drag:active { cursor: grabbing; }
+  .drag.back { transition: transform .35s var(--ease-out); }
+  .arrow { width: 70px; height: 20px; color: rgba(255,255,255,.4); }
+  .arrow .dash { stroke-dasharray: 6 6; animation: dash 1s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset: -12; } }
+  .drop.hot .folder { transform: scale(1.1); transition: transform .2s var(--ease-out); }
+  .drop.got .folder { animation: gulp .45s var(--ease-out); }
+  @keyframes gulp { 40% { transform: scale(1.18); } }
+  .os-seg { display: inline-grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line); }
+  .os-seg button { all: unset; cursor: pointer; padding: 7px 14px; border-radius: 7px; font-size: 14px; text-align: center; color: var(--dim); }
+  .os-seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+  .os-seg button:focus-visible { outline: 2px solid var(--accent); }
+  .finder { width: min(420px, 100%); }
+  .finder-list { position: relative; padding: 6px 0 60px; }
+  .frow { display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 13px; }
+  .frow .appicon { width: 22px; box-shadow: none; }
+  .frow.sel { background: #3d63dd; }
+  .ctx { position: absolute; left: 120px; top: 30px; z-index: 3; width: 170px; border-radius: 8px; background: rgba(50,49,56,.98); border: 1px solid rgba(255,255,255,.14); padding: 4px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+  .ctx button { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; padding: 4px 10px; border-radius: 4px; font: 13px -apple-system, system-ui, sans-serif; color: #f1f0f4; }
+  .ctx button:hover, .ctx button:focus-visible { background: #3d7bd9; outline: none; }
+  .ctx hr { border: 0; border-top: 1px solid rgba(255,255,255,.12); margin: 3px 0; }
+  .ctx span { display: block; padding: 4px 10px; font-size: 13px; color: rgba(255,255,255,.45); }
+  .alert { width: 280px; margin: 16px auto 0; border-radius: 14px; background: #2f2e35; border: 1px solid rgba(255,255,255,.14); padding: 18px; text-align: center; font-family: -apple-system, system-ui, sans-serif; color: #f1f0f4; box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .alert .appicon { width: 52px; margin: 0 auto 10px; }
+  .alert p { font-size: 12px; line-height: 1.4; }
+  .alert p b { display: block; font-size: 13px; margin-bottom: 4px; }
+  .alert .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .mbtn { all: unset; box-sizing: border-box; cursor: pointer; padding: 6px 10px; border-radius: 7px; background: #4a4950; font: 13px -apple-system, system-ui, sans-serif; text-align: center; color: #fff; }
+  .mbtn.pri { background: #3d7bd9; }
+  .mbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .glow { animation: glow 1.6s ease-in-out infinite; }
+  @keyframes glow { 50% { box-shadow: 0 0 0 4px rgba(139,108,255,.55); } }
+  .settings { width: min(520px, 100%); }
+  .set-body { display: grid; grid-template-columns: 150px 1fr; min-height: 180px; font-size: 12px; }
+  .set-side { background: #27262d; padding: 10px 6px; }
+  .set-side span { display: block; padding: 5px 8px; border-radius: 6px; color: rgba(255,255,255,.7); }
+  .set-side span.act { background: #3d63dd; color: #fff; }
+  .set-main { padding: 16px; }
+  .set-main h5 { font-size: 14px; margin-bottom: 10px; }
+  .set-main p { color: rgba(255,255,255,.75); line-height: 1.4; margin-bottom: 12px; }
+  .mini-panel { width: 260px; border-radius: 12px; background: var(--mac-panel); border: 1px solid rgba(255,255,255,.12); padding: 10px; font-family: -apple-system, system-ui, sans-serif; color: #f1f0f4; transform-origin: 50% 0; transition: opacity .2s ease, transform .35s cubic-bezier(.3, 1.3, .5, 1), visibility .2s; }
+  .mini-panel p { padding: 7px 10px; border-radius: 6px; font-size: 13px; }
+  .mini-panel p:first-child { background: var(--karman); }
+  .mini-panel.closed { opacity: 0; transform: translateY(-8px) scale(.94); visibility: hidden; }
+  .hot-keys { display: flex; gap: 10px; }
+  .hot-keys .kc { min-width: 64px; height: 60px; font: 500 22px -apple-system, system-ui, sans-serif; }
+  .ok-line { display: none; color: #34c759; font-weight: 600; font-size: 15px; }
+  .ok-line.show { display: block; }
+  details { margin-top: 24px; border: 1px solid var(--line); border-radius: 4px; padding: 16px 20px; }
+  summary { cursor: pointer; font-weight: 600; }
+  details p { color: var(--dim); margin-top: 10px; font-size: 15px; }
+  details a { color: var(--text); }
+
+  /* Поддержка */
+  /* Обратная связь: крупная ссылка на канал и живой QR-код для телефона */
+  .fb { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); gap: 48px; align-items: center; }
+  .fb h2 { font-size: clamp(40px, 6.2vw, 84px); line-height: .98; letter-spacing: -.04em; max-width: none; }
+  .fb h2 a { color: var(--accent); text-decoration: none; }
+  .fb h2 a:hover { text-decoration: underline; text-decoration-thickness: .06em; text-underline-offset: .1em; }
+  .fb-text { color: var(--dim); font-size: 19px; max-width: 46ch; margin-top: 20px; }
+  .fb-links { margin-top: 32px; display: grid; grid-template-columns: minmax(0, 360px); gap: 12px; }
+  .gh { display: grid; grid-template-columns: 24px 1fr; gap: 2px 12px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 8px; text-decoration: none; transition: background-color .15s ease; }
+  .gh:hover { background: var(--surface); }
+  .gh svg { width: 22px; height: 22px; grid-row: span 2; margin-top: 2px; }
+  .gh b { font-weight: 600; }
+  .gh span { color: var(--dim); font-size: 14px; }
+  /* Кнопка нужна там, где QR-кода нет: на телефоне и планшете */
+  .fb-open { display: none; margin-top: 24px; }
+  .qrcard { display: grid; justify-items: center; gap: 12px; padding: 28px 24px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); text-align: center; }
+  .qrbox { padding: 14px; border-radius: 14px; background: #fff; line-height: 0; }
+  .qrbox canvas { width: 200px; height: 200px; display: block; cursor: crosshair; }
+  .qrcard b { font: 500 16px var(--mono); }
+  .qrcard p { font-size: 14px; color: var(--dim); max-width: 24ch; }
+
+  /* Футер: строка ссылок и слово KARMAN во всю ширину. Буквы заливаются при появлении
+     и волной вокруг курсора, как кнопка скачивания. */
+  footer { padding-block: 40px 12px; overflow: hidden; }
+  .foot-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; }
+  .foot-row + .foot-row { margin-top: 20px; }
+  .foot-links { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 15px; }
+  .foot-links a { color: var(--dim); text-decoration: none; }
+  .foot-links a:hover { color: var(--text); }
+  .foot-print { font-size: 13px; color: var(--dim); }
+  .foot-print a { color: var(--dim); }
+  .to-top { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 99px; border: 1px solid var(--line); font-size: 14px; transition: border-color .15s ease; }
+  .to-top:hover { border-color: var(--text); }
+  .to-top:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .to-top svg { width: 16px; height: 16px; }
+  .mark { display: flex; justify-content: space-between; margin: 28px -4px 0; padding-bottom: .04em; font: var(--dw) clamp(72px, 17vw, 230px)/.8 var(--display); user-select: none; }
+  .mark span { display: inline-block; color: transparent; -webkit-text-stroke: 1.5px var(--line); transition: color .5s var(--ease-out), -webkit-text-stroke-color .5s ease, transform .5s var(--ease-out); }
+  .mark span.lit { color: var(--accent); -webkit-text-stroke-color: transparent; transform: translateY(-4%); }
+  .mark span.warm { color: rgba(139,108,255,.35); -webkit-text-stroke-color: rgba(139,108,255,.6); }
+
+  @media (max-width: 980px) {
+    .top nav { display: none; }
+    .hero, .sec-head { grid-template-columns: minmax(0, 1fr); }
+    .hero { padding-block: 40px 64px; }
+    .facts { grid-template-columns: 1fr 1fr; }
+    .fb, .fb-links { grid-template-columns: minmax(0, 1fr); }
+    .qrcard { display: none; }
+    .fb-open { display: inline-flex; }
+    .small { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 640px) {
+    .sec { padding-block: 72px; }
+    .brand small { display: none; }
+    .desk-bg { min-height: 0; padding: 12px; }
+    .panel { position: relative; top: 0; right: 0; width: 100%; translate: none; }
+    .grab-zone { cursor: default; }
+    .panel.closed { display: none; }
+    .menubar .opt { display: none; }
+    .tabs button { padding: 12px 4px; }
+    .mb-btn { width: 44px; height: 30px; }
+    .row { padding-block: 12px; }
+    .stream { grid-template-columns: 1fr; padding: 24px; gap: 20px; }
+    .stream .kc { flex: 1; min-width: 0; height: 56px; }
+    .demo-screen { padding: 24px; }
+    .try { grid-template-columns: 1fr; }
+    .try .kc { width: 100%; height: 56px; }
+    .modes, .facts, .small, .steps-row { grid-template-columns: 1fr; }
+    .tl { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .tl-line { display: none; }
+    .tl small { display: none; }
+    .tl b { font-size: 15px; }
+    .tl .dotn { width: 36px; height: 36px; margin-bottom: 4px; }
+    .panes { padding: 24px 14px; }
+    .set-body { grid-template-columns: 1fr; }
+    .set-side { display: none; }
+    .duo { grid-template-columns: 1fr; justify-items: center; }
+    .duo .mac { width: 100%; }
+    .link { height: 40px; }
+    .link svg, .dot { display: none; }
+    .duo-stage { padding: 24px 16px; }
+    .mode { padding: 24px; }
+    .mode + .mode { border-left: 0; border-top: 1px solid var(--line); }
+    .cta .btn { flex: 1 1 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .tape div, .panel, .row.fresh, .arrive { animation: none; }
+    .try input { transition: none; }
+    .rows.up, .row-cur.done, .fix-line .ch.ok, .caret, .pane.on, .glow, .arrow .dash, .drop.got .folder { animation: none; }
+    .tl-line i, .mini-panel, .drag.back, .mark span { transition: none; }
+    .mark span.lit { transform: none; }
+    .fix-line .ch, .kc { transition: none; }
+    .panel { transition: none; }
+  }
+  /* Кнопка скачивания: рамка и полый текст, при наведении кнопка заливается акцентом слева направо,
+     за заливкой едет полоса-курсор. Идея с uiverse.io (satyamchaudharydev), переделана под clip-path. */
+  .dl {
+    position: relative; display: inline-flex; overflow: hidden; text-decoration: none;
+    border: 1.5px solid color-mix(in srgb, var(--text) 55%, transparent); border-radius: 4px;
+    font: var(--dw) clamp(17px, 1.7vw, 22px)/1 var(--display); letter-spacing: .06em; text-transform: uppercase;
+    transition: transform .16s var(--ease-out), border-color .3s ease, box-shadow .5s var(--ease-out);
+  }
+  .dl-text, .dl-fill { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 51px; padding: 0 26px; white-space: nowrap; }
+  .dl-text { color: transparent; -webkit-text-stroke: 1px var(--text); }
+  .dl-text svg { color: var(--text); }
+  .dl svg { width: 20px; height: 20px; flex: none; }
+  .dl-fill {
+    position: absolute; inset: 0;
+    background: var(--accent); color: var(--on-accent);
+    clip-path: inset(0 100% 0 0);
+    transition: clip-path .5s var(--ease-out);
+  }
+  .dl-bar {
+    position: absolute; inset: 0; pointer-events: none;
+    border-right: 4px solid var(--text);
+    transform: translateX(-100%);
+    transition: transform .5s var(--ease-out);
+  }
+  .dl:hover, .dl:focus-visible { border-color: var(--accent); box-shadow: 0 0 32px rgba(139, 108, 255, .45); }
+  .dl:hover .dl-fill, .dl:focus-visible .dl-fill { clip-path: inset(0 0 0 0); }
+  .dl:hover .dl-bar, .dl:focus-visible .dl-bar { transform: translateX(0); }
+  .dl:active { transform: scale(.97); }
+  /* Касание не даёт наведения: на телефоне кнопка сразу залита */
+  @media (hover: none), (pointer: coarse) {
+    .dl { border-color: var(--accent); }
+    .dl-fill { clip-path: none; }
+    .dl-bar { display: none; }
+  }
+  @media (max-width: 640px) {
+    .cta .dl { flex: 1 1 100%; }
+    .hero .cta { grid-template-columns: 1fr; }
+    .dl-text, .dl-fill { flex: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dl-fill, .dl-bar { transition: none; }
+  }
+
+  /* Движение. Первый экран: текст по очереди, затем панель. Ниже блоки проявляются по мере прокрутки,
+     анимация привязана к скроллу (view timeline), без JS. Без поддержки блоки просто видны. */
+  @keyframes rise { from { opacity: 0; transform: translateY(18px); } }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero > div:first-child > * { animation: rise .7s var(--ease-out) both; }
+    .hero > div:first-child > :nth-child(2) { animation-delay: .06s; }
+    .hero > div:first-child > :nth-child(3) { animation-delay: .12s; }
+    .hero > div:first-child > :nth-child(4) { animation-delay: .18s; }
+    .hero > div:first-child > :nth-child(5) { animation-delay: .24s; }
+    .desk { animation: rise .8s var(--ease-out) .2s both; }
+
+    @supports (animation-timeline: view()) {
+      .sec-head, .demo, .facts li, .steps li, .duo-stage, .small > article,
+      .tl-wrap, .panes, .fb > div {
+        animation: rise linear both;
+        animation-timeline: view();
+        animation-range: entry 0% entry 40%;
+        animation-timing-function: var(--ease-out);
+      }
+      /* Лесенка внутри групп: соседние элементы догоняют друг друга */
+      .facts li:nth-child(2), .steps li:nth-child(2), .small > article:nth-child(3n+2), .fb > div + div { animation-range: entry 8% entry 48%; }
+      .facts li:nth-child(3), .steps li:nth-child(3), .small > article:nth-child(3n) { animation-range: entry 16% entry 56%; }
+      .facts li:nth-child(4) { animation-range: entry 24% entry 64%; }
+    }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#"><span class="plate">ST</span>Karman <small>от Stack Tools</small></a>
+    <nav aria-label="Разделы">
+      <a href="#layout">Раскладка</a>
+      <a href="#phone">Телефон</a>
+      <a href="#install">Установка</a>
+      <a href="#support">Обратная связь</a>
+    </nav>
+    <a class="btn" href="https://github.com/Tool-vd40/karman">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+      GitHub
+    </a>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div>
+      <p class="label">Karman <span id="ver">1.3.1</span> для macOS 13+</p>
+      <h1>Скопировали и потеряли? Оно в кармане</h1>
+      <p class="lead">Karman живёт в строке меню и хранит всё, что вы копировали: текст, ссылки, скриншоты. <b>Панель ниже работает</b>: в ней можно искать и копировать.</p>
+      <div class="cta">
+        <a class="dl" href="https://github.com/Tool-vd40/karman/releases/latest/download/Karman.dmg"><span class="dl-text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M6 10l6 6 6-6M4 21h16"/></svg>Скачать для Mac</span><span class="dl-fill" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M6 10l6 6 6-6M4 21h16"/></svg>Скачать для Mac</span><span class="dl-bar" aria-hidden="true"></span></a>
+        <a class="btn" href="https://t.me/Stack_Tools">
+          <svg class="ic-tg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.9 4.3 18.7 19.4c-.2 1-.9 1.3-1.7.8l-4.8-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.9 8.9-8c.4-.3-.1-.5-.6-.2L6.5 13.2 1.8 11.7c-1-.3-1-1 .2-1.5L20.5 3c.9-.3 1.6.2 1.4 1.3Z"/></svg>
+          Telegram-канал
+        </a>
+      </div>
+      <p class="under">Бесплатно. Apple Silicon и Intel. Без аккаунта.</p>
+    </div>
+
+    <div class="desk">
+      <div class="menubar">
+        <svg width="14" height="16" viewBox="0 0 14 17" fill="currentColor" aria-hidden="true"><path d="M11.6 9c0-2.1 1.7-3.1 1.8-3.2-1-1.4-2.5-1.6-3-1.7-1.3-.1-2.5.8-3.1.8-.7 0-1.7-.8-2.8-.7C3 4.2 1.7 5 1 6.3c-1.5 2.6-.4 6.4 1 8.5.7 1 1.5 2.2 2.6 2.1 1.1 0 1.4-.7 2.7-.7s1.6.7 2.7.7c1.1 0 1.8-1 2.5-2.1.8-1.2 1.1-2.3 1.1-2.4 0 0-2.1-.8-2.1-3.4ZM9.5 2.7c.6-.7 1-1.7.9-2.7-.9 0-1.9.6-2.5 1.3-.6.6-1 1.6-.9 2.6 1 .1 1.9-.5 2.5-1.2Z"/></svg>
+        <b>Finder</b><span class="opt">Файл</span><span class="opt">Правка</span><span class="opt">Вид</span>
+        <span class="grow"></span>
+        <button class="mb-btn" id="toggle" aria-expanded="true" aria-controls="panel" aria-label="Панель Karman">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="10" height="7" rx="1.5"/><path d="M4.5 12.5h8a1 1 0 0 0 1-1v-5"/></svg>
+        </button>
+        <span class="opt">Чт 17 сент.</span><span>21:40</span>
+      </div>
+      <div class="desk-bg">
+        <div class="panel" id="panel">
+          <div class="grab-zone" id="grab" title="Перетащите окно"><div class="grip"></div></div>
+          <div class="tabs" role="tablist" aria-label="Тип записей">
+            <button role="tab" id="tab-text" aria-selected="true">Текст</button>
+            <button role="tab" id="tab-img" aria-selected="false">Картинки</button>
+          </div>
+          <input class="search" id="q" type="search" placeholder="Поиск" aria-label="Поиск по истории" autocomplete="off">
+          <ul class="list" id="list" aria-live="polite"></ul>
+          <div class="toast" id="toast" role="status"></div>
+        </div>
+      </div>
+      <div class="desk-hint"><span>Окно двигается за верхний край. Попробуйте поиск и вкладки</span><span><kbd>⌥⌘V</kbd> прячет панель</span></div>
+    </div>
+  </div>
+
+  <div class="tape" aria-hidden="true"><div>
+    <span><s>ghbdtn</s>привет</span><span><s>cgfcb,j</s>спасибо</span><span><s>pfdnhf d 10</s>завтра в 10</span><span><s>руддщ</s>hello</span><span><s>jnrhjq Figma</s>открой Figma</span><span><s>,e[ufknthbz</s>бухгалтерия</span>
+    <span><s>ghbdtn</s>привет</span><span><s>cgfcb,j</s>спасибо</span><span><s>pfdnhf d 10</s>завтра в 10</span><span><s>руддщ</s>hello</span><span><s>jnrhjq Figma</s>открой Figma</span><span><s>,e[ufknthbz</s>бухгалтерия</span>
+  </div></div>
+
+  <section class="sec" id="layout">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 class="self-fix" id="fix-title"><span class="sr">Не та раскладка? Два раза Shift</span><span aria-hidden="true"><span class="fix-line">Не та раскладка?</span> Два раза Shift</span></h2>
+      </div>
+
+      <div class="demo">
+        <div class="stream" aria-hidden="true">
+          <div class="rows">
+            <p class="row-prev"></p>
+            <p class="row-cur"></p>
+            <p class="row-next"></p>
+          </div>
+          <div class="keys"><span class="kc">⇧ shift</span><span class="kc">⇧ shift</span></div>
+        </div>
+        <p class="sr">Пример: фраза ghbdtn, набранная в английской раскладке, после двойного Shift становится словом «привет».</p>
+        <div class="demo-screen">
+          <h3 class="try-title">Попробуйте сами</h3>
+          <div class="try">
+            <input id="try" placeholder="Например, ghbdtn" aria-label="Текст для проверки раскладки" aria-describedby="try-note" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+            <button class="kc" id="shift" type="button" aria-label="Shift. Нажмите два раза подряд, чтобы исправить текст">⇧ shift</button>
+          </div>
+          <p class="try-note" id="try-note" aria-live="polite">Пишите через пробел: слово в чужой раскладке исправится само. Двойной Shift исправит всю строку.</p>
+        </div>
+        <div class="modes">
+          <div class="mode">
+            <h3>По двойному Shift</h3>
+            <p>Исправляет выделенный текст или то, что стоит перед курсором. Работает в браузерах и приложениях на Electron.</p>
+          </div>
+          <div class="mode">
+            <h3>На лету</h3>
+            <p>Слово в чужой раскладке меняется само, на пробеле, Tab или Enter. Исправило зря? Нажмите <kbd>⌫</kbd>: слово вернётся, и Karman его запомнит. Включается в настройках.</p>
+          </div>
+        </div>
+      </div>
+
+      <details class="more">
+        <summary>Как Karman понимает, что исправлять</summary>
+        <ul class="facts">
+        <li><b>Docker остаётся Docker</b>Переводятся только слова, которые складываются в настоящие.</li>
+        <li><b>Знает про х, ж, э и б</b><kbd>[</kbd> <kbd>;</kbd> <kbd>'</kbd> <kbd>,</kbd> читаются как буквы, слово не рвётся.</li>
+        <li><b>Молчит, где не надо</b>В терминалах и полях паролей не срабатывает, короткие слова в коде не трогает.</li>
+        <li><b>Ничего не запоминает</b>Слово сверяется со встроенным словарём и сразу забывается.</li>
+        </ul>
+      </details>
+    </div>
+  </section>
+
+  <section class="sec" id="phone">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>История Mac в телефоне</h2>
+      </div>
+      <div class="duo-stage">
+        <div class="duo">
+          <div class="mac">
+            <div class="mac-bar"><i></i><i></i><i></i><b>Karman на Mac</b></div>
+            <ul class="mlist" id="sync-mac" aria-label="История на Mac"></ul>
+          </div>
+          <div class="link" aria-hidden="true">
+            <svg viewBox="0 0 200 90"><path d="M10 70 Q100 -20 190 70" fill="none" stroke="#363447" stroke-width="2" stroke-dasharray="4 6"/></svg>
+            <span class="dot"></span>
+            <span class="wifi">Wi-Fi, без интернета</span>
+          </div>
+          <div class="ph">
+            <div class="scr">
+              <div class="notch"></div>
+              <h4>Karman</h4>
+              <ul class="plist" id="sync-phone" aria-label="История на телефоне"></ul>
+              <form class="compose" id="sync-send">
+                <input id="sync-msg" maxlength="60" placeholder="Отправить на Mac" aria-label="Текст для отправки на Mac" autocomplete="off">
+                <button type="submit" aria-label="Отправить">↑</button>
+              </form>
+            </div>
+          </div>
+        </div>
+        <p class="duo-hint" id="sync-hint" aria-live="polite">Щёлкните запись на Mac или отправьте что-нибудь с телефона.</p>
+      </div>
+      <ol class="steps steps-row">
+        <li><div><h3>Включите раздачу</h3><p>Настройки Karman, вкладка «Телефон».</p></div></li>
+        <li><div><h3>Наведите камеру на QR-код</h3><p>Введите код с экрана Mac. Он меняется каждые пять минут.</p></div></li>
+        <li><div><h3>Добавьте на экран «Домой»</h3><p>Дальше Karman открывается как приложение.</p></div></li>
+      </ol>
+      <p class="shortcut"><b>Команды на iPhone.</b> Кнопка на экране «Домой» или кнопка действия кладёт последнее скопированное на Mac в буфер телефона.</p>
+    </div>
+  </section>
+
+  <section class="sec">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Мелочи, которые заметны на второй день</h2>
+        <p>Karman не появляется в Dock и не просит внимания, пока вы не нажмёте <kbd>⌥⌘V</kbd>.</p>
+      </div>
+      <div class="small">
+        <article class="tile">
+          <div class="scene s1" aria-hidden="true"><span class="mb"><span class="mb-ic"></span></span><span class="mp"><span class="slots"><span class="slot new"></span><span class="slot"></span><span class="slot"></span></span></span><span class="shot"></span><span class="lbl">Рабочий стол чистый</span><span class="flash"></span></div>
+          <h3>Карман скриншотов</h3>
+          <p>Снимки экрана попадают в панель. Включите «Хранить только в Karman», и рабочий стол перестанет зарастать файлами.</p>
+        </article>
+        <article class="tile">
+          <div class="scene s2" aria-hidden="true"><span class="mp"><span class="lines"><span class="rw r1"></span><span class="rw r2"></span><span class="rw r3"></span><span class="rw r4"></span></span></span><span class="chat"><span class="lbl">Чат</span><span class="count tag">2 записи</span></span><span class="fly"></span><span class="cur"><svg viewBox="0 0 14 20"><path d="M1 1v16l4.2-4 2.6 6 2.4-1-2.6-6H13z" fill="#fff" stroke="#000" stroke-width="1"/></svg><span class="cmd">⌘</span></span></div>
+          <h3>Несколько записей сразу</h3>
+          <p><kbd>⌘</kbd>-щелчок выбирает записи, и они уезжают в чат одним перетаскиванием.</p>
+        </article>
+        <article class="tile">
+          <div class="scene s3" aria-hidden="true"><span class="mp"><span class="lines"><span class="rw r1"></span><span class="rw r2"></span><span class="rw r3"></span><span class="rw r4"></span></span></span><span class="pv"><i></i><i></i></span><span class="space">пробел</span></div>
+          <h3>Крупный просмотр</h3>
+          <p>Пробел открывает запись, как в Finder.</p>
+        </article>
+        <article class="tile">
+          <div class="scene s4" aria-hidden="true"><span class="mb"><span class="mb-ic"></span></span><span class="badge">+1</span><span class="mp"><span class="rw"></span><span class="lbl">отчёт.pdf</span></span><span class="doc"><b>PDF</b></span><span class="cur"><svg viewBox="0 0 14 20"><path d="M1 1v16l4.2-4 2.6 6 2.4-1-2.6-6H13z" fill="#fff" stroke="#000" stroke-width="1"/></svg></span></div>
+          <h3>Файл на значок</h3>
+          <p>Перетащите файл на значок в строке меню, и он окажется в истории.</p>
+        </article>
+        <article class="tile">
+          <div class="scene s5" aria-hidden="true"><span class="mb"></span><span class="ghost"></span><span class="mp"><span class="handle"></span><span class="lines"><span class="rw r1"></span><span class="rw r2"></span><span class="rw r3"></span></span></span><span class="cur"><svg viewBox="0 0 14 20"><path d="M1 1v16l4.2-4 2.6 6 2.4-1-2.6-6H13z" fill="#fff" stroke="#000" stroke-width="1"/></svg></span><span class="tag">Запомнит место</span></div>
+          <h3>Панель там, где удобно</h3>
+          <p>Тащится за верхний край и запоминает место.</p>
+        </article>
+        <article class="tile">
+          <div class="scene s6" aria-hidden="true"><span class="mp"><span class="seg"></span><span class="w t1 ru">Текст</span><span class="w t1 en">Text</span><span class="w t2 ru">Картинки</span><span class="w t2 en">Images</span><span class="box"></span><span class="w t3 ru">Поиск</span><span class="w t3 en">Search</span><span class="rw k1"></span><span class="rw k2"></span></span><span class="tag sys"><span class="ru">Язык системы: русский</span><span class="en">System language: English</span></span></div>
+          <h3>Русский и английский</h3>
+          <p>Язык интерфейса берётся из системы.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="install">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Поставьте за минуту</h2>
+        <p>Четыре шага. Их можно пройти прямо здесь: перетащить иконку, нажать нужную кнопку в окне macOS и открыть панель. На Mac всё будет так же.</p>
+      </div>
+      <div class="tl-wrap">
+        <div class="tl-line" aria-hidden="true"><i id="inst-fill"></i></div>
+        <ol class="tl" id="inst-tl">
+          <li><button type="button"><span class="dotn"><span>1</span></span><b>Скачайте Karman.dmg</b><small><span id="inst-size">4,4 МБ</span>, бесплатно</small></button></li>
+          <li><button type="button"><span class="dotn"><span>2</span></span><b>Перетащите в «Программы»</b><small>Как любое приложение для Mac</small></button></li>
+          <li><button type="button"><span class="dotn"><span>3</span></span><b>Разрешите запуск</b><small>Один раз, macOS спросит</small></button></li>
+          <li><button type="button"><span class="dotn"><span>4</span></span><b>Нажмите ⌥⌘V</b><small>Панель откроется у курсора</small></button></li>
+        </ol>
+      </div>
+      <div class="panes">
+        <div class="pane" data-pane="0">
+          <span class="appicon" aria-hidden="true"></span>
+          <a class="dl" id="inst-dl" href="https://github.com/Tool-vd40/karman/releases/latest/download/Karman.dmg"><span class="dl-text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M6 10l6 6 6-6M4 21h16"/></svg>Скачать Karman.dmg</span><span class="dl-fill" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M6 10l6 6 6-6M4 21h16"/></svg>Скачать Karman.dmg</span><span class="dl-bar" aria-hidden="true"></span></a>
+          <p class="req">macOS 13+. Apple Silicon и Intel. Обновляется сам.</p>
+          <button class="alt" type="button" id="inst-have">Уже скачали? Дальше</button>
+        </div>
+
+        <div class="pane" data-pane="1">
+          <div class="win dmg">
+            <div class="win-bar"><i></i><i></i><i></i><b>Karman <span class="ver-copy">1.3.1</span></b></div>
+            <div class="dmg-body">
+              <div><span class="appicon drag" id="inst-drag" tabindex="0" role="button" aria-label="Иконка Karman. Нажмите Enter, чтобы перенести в Программы"></span><p class="cap">Karman</p></div>
+              <svg class="arrow" viewBox="0 0 70 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path class="dash" d="M2 10h60"/><path d="M56 4l8 6-8 6"/></svg>
+              <div class="drop" id="inst-drop"><div class="folder"></div><p class="cap">Программы</p></div>
+            </div>
+          </div>
+          <p class="say" id="inst-say1" aria-live="polite">Перетащите иконку Karman на папку «Программы».</p>
+          <button class="alt" type="button" id="inst-auto">Не получается тащить? Перенести автоматически</button>
+        </div>
+
+        <div class="pane" data-pane="2">
+          <div class="os-seg" role="group" aria-label="Версия macOS">
+            <button type="button" aria-pressed="false" data-os="14">macOS 14 и старше</button>
+            <button type="button" aria-pressed="true" data-os="15">macOS 15 и новее</button>
+          </div>
+          <div id="inst-os14" hidden>
+            <div class="win finder">
+              <div class="win-bar"><i></i><i></i><i></i><b>Программы</b></div>
+              <div class="finder-list">
+                <div class="frow">Калькулятор</div>
+                <div class="frow sel"><span class="appicon"></span>Karman</div>
+                <div class="frow">Календарь</div>
+                <div class="ctx" id="inst-menu"><button type="button" class="glow" id="inst-open1">Открыть</button><hr><span>Показать содержимое</span><span>Переместить в Корзину</span></div>
+              </div>
+            </div>
+            <div class="alert" id="inst-alert" hidden>
+              <span class="appicon"></span>
+              <p><b>macOS не может проверить разработчика «Karman»</b>Вы уверены, что хотите открыть приложение?</p>
+              <div class="btns"><button class="mbtn" type="button" id="inst-cancel">Отменить</button><button class="mbtn pri glow" type="button" id="inst-open2">Открыть</button></div>
+            </div>
+          </div>
+          <div id="inst-os15" style="width:100%;display:grid;justify-items:center">
+            <div class="win settings">
+              <div class="win-bar"><i></i><i></i><i></i><b>Системные настройки</b></div>
+              <div class="set-body">
+                <div class="set-side"><span>Основные</span><span>Уведомления</span><span class="act">Конфиденциальность и безопасность</span><span>Рабочий стол и Dock</span></div>
+                <div class="set-main">
+                  <h5>Безопасность</h5>
+                  <p>Программа «Karman» заблокирована, так как её разработчик не установлен.</p>
+                  <button class="mbtn glow" type="button" id="inst-open3">Открыть всё равно</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="say" id="inst-say2" aria-live="polite">Karman не заверен у Apple, поэтому macOS спросит один раз. Нажмите подсвеченную кнопку.</p>
+        </div>
+
+        <div class="pane" data-pane="3">
+          <div class="mini-panel closed" id="inst-panel" aria-hidden="true"><p>надо скачать Docker и запустить</p><p>Черновик письма клиенту</p><p>git push origin main</p></div>
+          <div class="hot-keys" role="group" aria-label="Сочетание Option Command V">
+            <button class="kc" type="button" data-k="alt" aria-label="Option">⌥</button>
+            <button class="kc" type="button" data-k="cmd" aria-label="Command">⌘</button>
+            <button class="kc" type="button" data-k="v" aria-label="V">V</button>
+          </div>
+          <p class="say" id="inst-say3" aria-live="polite">Нажмите <kbd>⌥⌘V</kbd> на клавиатуре или по очереди клавиши на экране.</p>
+          <p class="ok-line" id="inst-done">✓ Готово. Karman ждёт в строке меню.</p>
+        </div>
+      </div>
+      <details>
+        <summary>А для Windows?</summary>
+        <p>Версия для Windows 11 уже работает и сейчас дорабатывается. Выход объявим в <a href="https://t.me/Stack_Tools">Telegram-канале</a>. Подробная инструкция для Mac со скриншотами лежит в <a href="https://github.com/Tool-vd40/karman/blob/main/УСТАНОВКА.md">УСТАНОВКА.md</a>.</p>
+      </details>
+    </div>
+  </section>
+
+  <section class="sec" id="support">
+    <div class="wrap fb">
+      <div>
+        <h2>Что поправить? Пишите в <a href="https://t.me/Stack_Tools">@Stack_Tools</a></h2>
+        <p class="fb-text">Баги, неудобства, идеи. Там же выходят новые версии и сборка для Windows.</p>
+        <a class="btn btn-go fb-open" href="https://t.me/Stack_Tools"><svg class="ic-tg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.9 4.3 18.7 19.4c-.2 1-.9 1.3-1.7.8l-4.8-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.9 8.9-8c.4-.3-.1-.5-.6-.2L6.5 13.2 1.8 11.7c-1-.3-1-1 .2-1.5L20.5 3c.9-.3 1.6.2 1.4 1.3Z"/></svg>Открыть Telegram</a>
+        <div class="fb-links">
+          <a class="gh" href="https://github.com/Tool-vd40/karman"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1 6.2L12 17.4l-5.5 2.9 1-6.2L3 9.7l6.2-.9z"/></svg><b>Звезда на GitHub</b><span>Так Karman проще найти другим</span></a>
+        </div>
+      </div>
+      <div class="qrcard" id="qrcard">
+        <div class="qrbox"><canvas id="qr" width="200" height="200" role="img" aria-label="QR-код со ссылкой на канал Stack Tools в Telegram"></canvas></div>
+        <b>t.me/Stack_Tools</b>
+        <p>Наведите камеру телефона, чтобы открыть канал</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-row">
+      <nav class="foot-links" aria-label="Ссылки в подвале">
+        <a href="https://github.com/Tool-vd40/karman/releases/latest/download/Karman.dmg">Скачать</a>
+        <a href="https://github.com/Tool-vd40/karman/blob/main/УСТАНОВКА.md">Установка</a>
+        <a href="https://t.me/Stack_Tools">Telegram</a>
+        <a href="https://github.com/Tool-vd40/karman">GitHub</a>
+      </nav>
+      <button class="to-top" type="button" id="to-top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>Наверх</button>
+    </div>
+    <div class="foot-row foot-print">
+      <span>© 2026 Stack Tools. Все права защищены. <a href="https://github.com/Tool-vd40/karman/blob/main/LICENSE">Лицензия</a></span>
+      <span>Бесплатно для Mac</span>
+    </div>
+    <div class="mark" id="mark" aria-hidden="true"><span>K</span><span>A</span><span>R</span><span>M</span><span>A</span><span>N</span></div>
+  </div>
+</footer>
+
+
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  // Источники записей: цветная плашка, как иконка приложения в панели
+  const SRC = {
+    tg: ['Telegram', '#2aabee', 'T'], safari: ['Safari', '#1a7cf5', 'S'], term: ['Терминал', '#2b2b2b', '>_'],
+    phone: ['С телефона', '#5b3bf5', '<svg width="10" height="14" viewBox="0 0 10 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="8" height="12" rx="1.5"/></svg>'], mail: ['Почта', '#3b8ef0', '@'], notes: ['Заметки', '#e8b100', 'N'],
+  };
+  const texts = [
+    { t: 'надо скачать Docker и запустить', s: 'tg', at: '21:39' },
+    { t: 'Черновик письма клиенту', s: 'mail', at: '21:37' },
+    { t: 'git push origin main', s: 'term', at: '21:30' },
+    { t: 'Идея: вынести настройки в меню', s: 'phone', at: '21:12' },
+    { t: 'Договорились на четверг, 15:00', s: 'mail', at: 'вчера' },
+    { t: 'https://github.com/Tool-vd40/karman', s: 'safari', at: 'вчера' },
+    { t: 'Купить: молоко, кофе, батарейки AA', s: 'notes', at: 'вчера' },
+  ];
+  const images = [
+    { mock: 'design', t: 'Макет главной.png' },
+    { src: 'img/shot-settings.jpg', t: 'Снимок экрана 21:20' },
+    { mock: 'chart', t: 'График продаж.png' },
+    { src: 'img/shot-icon.jpg', t: 'Karman-icon.png' },
+  ];
+
+  const list = $('list'), q = $('q'), toast = $('toast');
+  let tab = 'text', freshText = null;
+
+  const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function render() {
+    const needle = q.value.trim().toLowerCase();
+    list.className = 'list' + (tab === 'img' ? ' shots' : '');
+    if (tab === 'img') {
+      const found = images.filter(i => i.t.toLowerCase().includes(needle));
+      list.innerHTML = found.map(i => `<li><button class="row" data-copy="${esc(i.t)}">${i.src ? `<img src="${i.src}" alt="${esc(i.t)}">` : `<span class="mock mock-${i.mock}" role="img" aria-label="${esc(i.t)}"></span>`}<small>${esc(i.t)}</small></button></li>`).join('');
+    } else {
+      const found = texts.filter(i => i.t.toLowerCase().includes(needle));
+      list.innerHTML = found.map(i => {
+        const [name, color, glyph] = SRC[i.s];
+        const cls = i.t === freshText ? 'row fresh' : 'row';
+        return `<li><button class="${cls}" data-copy="${esc(i.t)}"><span class="ic" style="background:${color}" aria-hidden="true">${glyph}</span><span>${esc(i.t)}<small>${name}, ${i.at}</small></span></button></li>`;
+      }).join('');
+    }
+    if (!list.children.length) list.innerHTML = `<li class="empty">Ничего не нашлось по «${esc(q.value)}»</li>`;
+    freshText = null;
+  }
+
+  let toastTimer;
+  function say(text) {
+    toast.textContent = text; toast.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
+  }
+
+  list.addEventListener('click', e => {
+    const b = e.target.closest('[data-copy]'); if (!b) return;
+    try { navigator.clipboard?.writeText(b.dataset.copy).catch(() => {}); } catch {}
+    say('Скопировано. Теперь ⌘V');
+  });
+  q.addEventListener('input', render);
+  for (const [id, name] of [['tab-text', 'text'], ['tab-img', 'img']]) {
+    $(id).addEventListener('click', () => {
+      tab = name;
+      $('tab-text').setAttribute('aria-selected', name === 'text');
+      $('tab-img').setAttribute('aria-selected', name === 'img');
+      render();
+    });
+  }
+
+  const panel = $('panel'), toggle = $('toggle');
+
+  // Окно Karman двигается за верхний край, но не выходит за рабочий стол
+  (() => {
+    const zone = $('grab'), desk = panel.parentElement;
+    let start = null;
+    const off = { x: 0, y: 0 };
+    zone.addEventListener('pointerdown', e => {
+      if (matchMedia('(max-width: 640px)').matches) return;
+      const p = panel.getBoundingClientRect(), d = desk.getBoundingClientRect();
+      start = { x: e.clientX, y: e.clientY, ox: off.x, oy: off.y,
+        minX: off.x - (p.left - d.left), maxX: off.x + (d.right - p.right),
+        minY: off.y - (p.top - d.top), maxY: off.y + (d.bottom - p.bottom) };
+      zone.setPointerCapture(e.pointerId);
+      panel.classList.add('dragging');
+    });
+    zone.addEventListener('pointermove', e => {
+      if (!start) return;
+      off.x = Math.min(start.maxX, Math.max(start.minX, start.ox + e.clientX - start.x));
+      off.y = Math.min(start.maxY, Math.max(start.minY, start.oy + e.clientY - start.y));
+      panel.style.setProperty('--dx', off.x + 'px');
+      panel.style.setProperty('--dy', off.y + 'px');
+    });
+    const stop = () => { start = null; panel.classList.remove('dragging'); };
+    zone.addEventListener('pointerup', stop);
+    zone.addEventListener('pointercancel', stop);
+  })();
+  function setOpen(open) {
+    panel.classList.toggle('closed', !open);
+    toggle.setAttribute('aria-expanded', open);
+  }
+  toggle.addEventListener('click', () => setOpen(panel.classList.contains('closed')));
+  addEventListener('keydown', e => {
+    if (e.altKey && e.metaKey && e.code === 'KeyV') { e.preventDefault(); setOpen(panel.classList.contains('closed')); }
+  });
+  render();
+
+  // Демо раскладки. Упрощённая копия логики Karman: слова из списка EN_KEEP остаются,
+  // остальное переводится по раскладке. ponytail: в приложении полный словарь, здесь около сорока слов.
+  const EN = "qwertyuiop[]asdfghjkl;'zxcvbnm,./`QWERTYUIOP{}ASDFGHJKL:\"ZXCVBNM<>?~@#$^&";
+  const RU = 'йцукенгшщзхъфывапролджэячсмитьбю.ёЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ,Ё"№;:?';
+  const toRu = new Map([...EN].map((c, i) => [c, RU[i]]));
+  const toEn = new Map([...RU].map((c, i) => [c, EN[i]]));
+  const EN_KEEP = new Set('docker figma github git push pull main api mac test code mail link macos iphone android telegram safari chrome karman slack zoom google youtube notion windows wifi email ok hello world the and for you xcode swift python npm json'.split(' '));
+  const map = (word, table) => [...word].map(c => table.get(c) ?? c).join('');
+  const isLatin = w => /[a-z]/i.test(w);
+  const isKept = w => EN_KEEP.has(w.toLowerCase().replace(/[^a-z]/g, ''));
+
+  function fixLayout(text) {
+    const words = text.split(/(\s+)/);
+    const wrongLatin = words.some(w => isLatin(w) && !isKept(w));
+    const single = words.filter(w => w.trim()).length === 1;
+    return words.map(w => {
+      if (/^\s*$/.test(w)) return w;
+      if (wrongLatin) return isLatin(w) && isKept(w) ? w : (/[а-яё]/i.test(w) ? w : map(w, toRu));
+      // Русское слово уходит в английскую раскладку, только если там получается известное слово.
+      // Одно слово переводится всегда, как в приложении: так можно заставить.
+      return /[а-яё]/i.test(w) && (single || isKept(map(w, toEn))) ? map(w, toEn) : w;
+    }).join('');
+  }
+
+  const tryInput = $('try'), shiftKey = $('shift'), tryNote = $('try-note');
+  let lastShift = 0, fixTimer;
+  function fixNow() {
+    const { selectionStart: a, selectionEnd: b, value } = tryInput;
+    const part = a !== b ? value.slice(a, b) : value;
+    const fixed = fixLayout(part);
+    if (!part.trim()) { tryNote.textContent = 'Сначала наберите что-нибудь, например ghbdtn.'; return; }
+    if (fixed === part) { tryNote.textContent = 'Здесь нечего исправлять. Наберите слово не в той раскладке, например ghbdtn.'; return; }
+    tryInput.value = a !== b ? value.slice(0, a) + fixed + value.slice(b) : fixed;
+    tryInput.classList.add('fixed');
+    clearTimeout(fixTimer); fixTimer = setTimeout(() => tryInput.classList.remove('fixed'), 1200);
+    tryNote.innerHTML = `Было <s>${esc(part)}</s>, стало <b>${esc(fixed)}</b>`;
+  }
+  const pressKey = k => { k.classList.add('down'); setTimeout(() => k.classList.remove('down'), 120); };
+  function shiftPress() {
+    pressKey(shiftKey);
+    const now = Date.now();
+    if (now - lastShift < 450) { lastShift = 0; fixNow(); } else lastShift = now;
+  }
+  // Двойной Shift считается, только если между нажатиями не было других клавиш
+  tryInput.addEventListener('keydown', e => { if (e.key === 'Shift') { if (!e.repeat) shiftPress(); } else lastShift = 0; });
+  shiftKey.addEventListener('click', () => { shiftPress(); tryInput.focus({ preventScroll: true }); });
+
+  // На лету: слово в чужой раскладке меняется на пробеле, Backspace сразу после возвращает его.
+  // ponytail: вместо словаря приложения здесь доля гласных, на редких словах может ошибиться.
+  const skipWords = new Set();
+  let lastAuto = null;
+  function autoFix(word) {
+    const key = word.toLowerCase();
+    if (skipWords.has(key)) return null;
+    const lat = word.replace(/[^a-z]/gi, ''), cyr = word.replace(/[^а-яё]/gi, '');
+    if (lat && !cyr) {
+      if (isKept(word)) return null;
+      const ru = map(word, toRu), ruLetters = ru.replace(/[^а-яё]/gi, '');
+      const latVowels = (lat.match(/[aeiou]/gi) || []).length / lat.length;
+      const ruVowels = (ruLetters.match(/[аеёиоуыэюя]/gi) || []).length / Math.max(1, ruLetters.length);
+      return latVowels < .25 && ruVowels > .2 && (ruLetters.length <= 2 || ruVowels < .75) ? ru : null;
+    }
+    if (cyr && !lat) { const en = map(word, toEn); return isKept(en) ? en : null; }
+    return null;
+  }
+  tryInput.addEventListener('input', e => {
+    lastAuto = null;
+    if (e.inputType !== 'insertText' || e.data !== ' ') return;
+    const caret = tryInput.selectionStart, before = tryInput.value.slice(0, caret - 1);
+    const word = before.match(/\S+$/)?.[0];
+    if (!word) return;
+    const fixed = autoFix(word);
+    if (!fixed) return;
+    const start = before.length - word.length;
+    tryInput.value = tryInput.value.slice(0, start) + fixed + tryInput.value.slice(caret - 1);
+    const pos = start + fixed.length + 1;
+    tryInput.setSelectionRange(pos, pos);
+    lastAuto = { start, word, fixed, pos, value: tryInput.value };
+    tryInput.classList.add('fixed');
+    clearTimeout(fixTimer); fixTimer = setTimeout(() => tryInput.classList.remove('fixed'), 900);
+    tryNote.innerHTML = `Исправлено на лету: <s>${esc(word)}</s> <b>${esc(fixed)}</b>. Backspace вернёт как было.`;
+  });
+  tryInput.addEventListener('keydown', e => {
+    if (e.key !== 'Backspace' || !lastAuto) return;
+    const a = lastAuto;
+    if (tryInput.value !== a.value || tryInput.selectionStart !== a.pos || tryInput.selectionEnd !== a.pos) return;
+    e.preventDefault();
+    tryInput.value = a.value.slice(0, a.start) + a.word + ' ' + a.value.slice(a.pos);
+    const pos = a.start + a.word.length + 1;
+    tryInput.setSelectionRange(pos, pos);
+    skipWords.add(a.word.toLowerCase());
+    lastAuto = null;
+    tryNote.innerHTML = `Вернули <b>${esc(a.word)}</b>. Это слово Karman больше не трогает.`;
+  });
+
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+
+  // Лента примеров: русские и английские фразы в чужой раскладке по очереди
+  (() => {
+    const box = document.querySelector('.stream'), rows = box.querySelector('.rows');
+    const prev = box.querySelector('.row-prev'), cur = box.querySelector('.row-cur'), next = box.querySelector('.row-next');
+    const keys = box.querySelectorAll('.kc');
+    const wrongs = ['ghbdtn? rfr ltkf', 'руддщ цщкдв', 'yflj crfxfnm Docker', ',e[ufknthbz', 'jnrhjq Figma', 'pfdnhf d 10'];
+    const POOL = 'абвгдежзийклмнопрстуфхцчшщыэюяabcdefghijklmnopqrstuvwxyz';
+    let visible = false;
+    new IntersectionObserver(([e]) => { visible = e.isIntersecting; }).observe(box);
+    const whenVisible = async () => { while (!visible) await wait(300); };
+    const showCur = (t, caret) => { cur.innerHTML = esc(t) + (caret ? '<span class="caret"></span>' : ''); };
+    const history = (w, r) => `<s>${esc(w)}</s><b>${esc(r)}</b>`;
+
+    function decode(from, to) {
+      return new Promise(res => {
+        const len = Math.max(from.length, to.length), start = performance.now(), dur = 900;
+        const tick = t => {
+          const p = Math.min(1, (t - start) / dur);
+          let html = '';
+          for (let i = 0; i < len; i++) {
+            const settle = 0.25 + 0.75 * i / len, b = to[i] ?? '';
+            if (b === ' ' || p >= settle) html += esc(b);
+            else if (p >= settle - 0.35) html += `<span class="nz">${POOL[Math.random() * POOL.length | 0]}</span>`;
+            else html += esc(from[i] ?? '');
+          }
+          cur.innerHTML = html;
+          if (p < 1) requestAnimationFrame(tick); else res();
+        };
+        requestAnimationFrame(tick);
+      });
+    }
+
+    if (still) {
+      prev.innerHTML = history(wrongs[1], fixLayout(wrongs[1]));
+      cur.textContent = fixLayout(wrongs[0]);
+      next.textContent = wrongs[2];
+      return;
+    }
+    (async () => {
+      let last = null;
+      for (let i = 0; ; i = (i + 1) % wrongs.length) {
+        const wrong = wrongs[i], right = fixLayout(wrong);
+        await whenVisible();
+        prev.innerHTML = last ? history(last[0], last[1]) : '';
+        next.textContent = wrongs[(i + 1) % wrongs.length];
+        cur.classList.remove('done');
+        rows.classList.remove('up'); void rows.offsetWidth; rows.classList.add('up');
+        for (let n = 0; n <= wrong.length; n++) { showCur(wrong.slice(0, n), true); await wait(55); }
+        await wait(450);
+        keys.forEach(pressKey); await wait(170); keys.forEach(pressKey); await wait(120);
+        await decode(wrong, right);
+        cur.classList.add('done');
+        last = [wrong, right];
+        await wait(1800);
+      }
+    })();
+  })();
+
+  // Заголовок раздела: ошибка появляется до того, как блок в кадре, исправление видно на глазах
+  (() => {
+    const h = $('fix-title'), line = h.querySelector('.fix-line');
+    const right = line.textContent, wrong = map(right, toEn);
+    const set = text => {
+      let i = 0;
+      line.innerHTML = text.split(' ').map(word => {
+        const html = [...word].map(c => `<span class="ch" data-i="${i++}">${esc(c)}</span>`).join('');
+        i++;
+        return `<span class="wd">${html}</span>`;
+      }).join(' ');
+    };
+    if (still) return;
+    let played = false;
+    const arm = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting || played) return;
+      arm.disconnect(); h.classList.add('bad'); set(wrong);
+    }, { rootMargin: '0px 0px 25% 0px' });
+    const fire = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting || played) return;
+      played = true; fire.disconnect();
+      setTimeout(() => line.querySelectorAll('.ch').forEach((c, n) => setTimeout(() => {
+        c.textContent = right[+c.dataset.i]; c.classList.add('ok');
+      }, n * 45)), 600);
+    }, { threshold: 1 });
+    arm.observe(h); fire.observe(h);
+  })();
+
+  // Мелочи: сцена двигается, только пока видна
+  const sceneWatch = new IntersectionObserver(es => es.forEach(e => e.target.classList.toggle('play', e.isIntersecting)), { threshold: 0.5 });
+  document.querySelectorAll('.scene').forEach(el => sceneWatch.observe(el));
+
+  // Mac и телефон рядом: записи перелетают в обе стороны, пока никто не трогает, блок показывает сам
+  (() => {
+    const macList = $('sync-mac'), phList = $('sync-phone'), dot = document.querySelector('#phone .dot'), hint = $('sync-hint');
+    const mac = [
+      { t: 'надо скачать Docker и запустить', at: '21:39' },
+      { t: 'Черновик письма клиенту', at: '21:37' },
+      { t: 'git push origin main', at: '21:30' },
+      { t: 'Идея: вынести настройки в меню', at: '21:12' },
+    ];
+    const phone = mac.map(i => ({ ...i }));
+    const newOnMac = ['Созвон в 16:00, ссылка в чате', 'https://github.com/Tool-vd40/karman', 'Пароль от Wi-Fi: на холодильнике'];
+    const newOnPhone = ['список покупок на субботу', 'фото чека.jpg', 'купить батарейки AA'];
+    let auto = true, busy = false, turn = 0, visible = false;
+    const clock = () => new Date().toTimeString().slice(0, 5);
+
+    const renderMac = fresh => {
+      macList.innerHTML = mac.slice(0, 5).map((i, n) => `<li><button type="button" data-n="${n}" class="${n === 0 && fresh ? 'arrive' : ''}">${esc(i.t)}<small>${i.phone ? 'С телефона' : 'Скопировано'}, ${i.at}</small></button></li>`).join('');
+    };
+    const renderPhone = fresh => {
+      phList.innerHTML = phone.slice(0, 6).map((i, n) => `<li class="${i.phone ? 'ph-own' : ''} ${n === 0 && fresh ? 'arrive' : ''}">${esc(i.t)}<small>${i.phone ? 'С телефона' : 'С Mac'}, ${i.at}</small></li>`).join('');
+    };
+
+    async function fly(fromEl, toList, text, reverse) {
+      if (still) return;
+      const a = fromEl.getBoundingClientRect(), b = toList.getBoundingClientRect();
+      const f = document.createElement('div');
+      f.className = 'flyer'; f.textContent = text;
+      f.style.left = a.left + 'px'; f.style.top = a.top + 'px';
+      document.body.append(f);
+      const dx = b.left + 10 - a.left, dy = b.top - a.top;
+      const curve = 'cubic-bezier(0.77, 0, 0.175, 1)';
+      dot.animate([{ offsetDistance: reverse ? '100%' : '0%', opacity: 1 }, { offsetDistance: reverse ? '0%' : '100%', opacity: 1 }], { duration: 700, easing: curve });
+      await f.animate([
+        { transform: 'none', opacity: 1 },
+        { transform: `translate(${dx / 2}px, ${dy / 2 - 60}px) scale(.9)`, opacity: 1, offset: .5 },
+        { transform: `translate(${dx}px, ${dy}px) scale(.85)`, opacity: 0 },
+      ], { duration: 750, easing: curve }).finished;
+      f.remove();
+    }
+    async function macToPhone(text, from) {
+      busy = true;
+      await fly(from, phList, text, false);
+      phone.unshift({ t: text, at: clock() });
+      renderPhone(true);
+      busy = false;
+    }
+    async function phoneToMac(text, from) {
+      busy = true;
+      await fly(from, macList, text, true);
+      mac.unshift({ t: text, at: clock(), phone: true });
+      phone.unshift({ t: text, at: clock(), phone: true });
+      renderMac(true); renderPhone(true);
+      // То же попадает и в панель первого экрана
+      texts.unshift({ t: text, s: 'phone', at: 'только что' }); render();
+      busy = false;
+    }
+
+    macList.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b || busy) return;
+      auto = false;
+      macToPhone(mac[+b.dataset.n].t, b);
+      hint.textContent = 'Запись ушла на телефон.';
+    });
+    $('sync-send').addEventListener('submit', e => {
+      e.preventDefault();
+      const t = $('sync-msg').value.trim();
+      if (!t) { hint.textContent = 'Сначала напишите текст в поле телефона.'; return; }
+      if (busy) return;
+      auto = false;
+      $('sync-msg').value = '';
+      phoneToMac(t, $('sync-send'));
+      hint.textContent = 'Текст пришёл на Mac с пометкой «С телефона», загляните и в панель вверху страницы.';
+    });
+    $('sync-msg').addEventListener('focus', () => { auto = false; });
+
+    renderMac(); renderPhone();
+    if (still) return;
+    new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.4 }).observe($('phone').querySelector('.duo-stage'));
+    (async () => {
+      while (auto) {
+        await wait(2600);
+        if (!auto || !visible || busy) continue;
+        if (turn % 2 === 0) {
+          const t = newOnMac[(turn / 2) % newOnMac.length];
+          mac.unshift({ t, at: clock() }); renderMac(true);
+          await wait(700);
+          if (!auto) break;
+          await macToPhone(t, macList.querySelector('button'));
+        } else {
+          const t = newOnPhone[((turn - 1) / 2) % newOnPhone.length];
+          busy = true;
+          await fly($('sync-send'), macList, t, true);
+          mac.unshift({ t, at: clock(), phone: true });
+          phone.unshift({ t, at: clock(), phone: true });
+          renderMac(true); renderPhone(true);
+          busy = false;
+        }
+        turn++;
+      }
+    })();
+  })();
+
+  // Установка: шаги ленты и репетиция каждого шага
+  (() => {
+    const stepBtns = [...document.querySelectorAll('#inst-tl button')];
+    const panes = [...document.querySelectorAll('#install .pane')];
+    const fill = $('inst-fill');
+    const done = new Set();
+    let current = 0;
+    function go(i) {
+      current = i;
+      stepBtns.forEach((b, n) => n === i ? b.setAttribute('aria-current', 'step') : b.removeAttribute('aria-current'));
+      panes.forEach((p, n) => p.classList.toggle('on', n === i));
+    }
+    function complete(i) {
+      done.add(i);
+      stepBtns[i].classList.add('done');
+      // Линия доходит до следующего кружка после каждого пройденного шага
+      fill.style.transform = `scaleX(${Math.min(1, (Math.max(...done) + 1) / 3)})`;
+      if (i < 3) setTimeout(() => go(i + 1), still ? 0 : 900);
+    }
+    stepBtns.forEach((b, i) => b.addEventListener('click', () => go(i)));
+
+    // 1. Скачивание: сама ссылка качает файл, шаг засчитываем
+    $('inst-dl').addEventListener('click', () => complete(0));
+    $('inst-have').addEventListener('click', () => complete(0));
+
+    // 2. Перетаскивание в «Программы»
+    const drag = $('inst-drag'), drop = $('inst-drop'), say1 = $('inst-say1');
+    let start = null, dx = 0, dy = 0;
+    const over = (x, y) => { const r = drop.getBoundingClientRect(); return x > r.left - 10 && x < r.right + 10 && y > r.top - 10 && y < r.bottom + 10; };
+    function moved() {
+      drag.classList.remove('back');
+      drag.style.transition = 'transform .3s var(--ease-out), opacity .3s ease';
+      const a = drag.getBoundingClientRect(), b = drop.querySelector('.folder').getBoundingClientRect();
+      drag.style.transform = `translate(${b.left + b.width / 2 - a.left - a.width / 2 + dx}px, ${b.top + b.height / 2 - a.top - a.height / 2 + dy}px) scale(.3)`;
+      drag.style.opacity = '0';
+      drop.classList.remove('hot'); drop.classList.add('got');
+      say1.innerHTML = '<b>Karman в «Программах».</b> Осталось разрешить первый запуск.';
+      dx = dy = 0;
+      setTimeout(() => { drag.style.transition = drag.style.transform = drag.style.opacity = ''; drop.classList.remove('got'); }, 1800);
+      complete(1);
+    }
+    drag.addEventListener('pointerdown', e => { start = { x: e.clientX, y: e.clientY }; drag.setPointerCapture(e.pointerId); drag.classList.remove('back'); });
+    drag.addEventListener('pointermove', e => {
+      if (!start) return;
+      dx = e.clientX - start.x; dy = e.clientY - start.y;
+      drag.style.transform = `translate(${dx}px, ${dy}px) scale(1.05)`;
+      drop.classList.toggle('hot', over(e.clientX, e.clientY));
+    });
+    drag.addEventListener('pointerup', e => {
+      if (!start) return;
+      start = null;
+      if (over(e.clientX, e.clientY)) return moved();
+      dx = dy = 0;
+      drag.classList.add('back'); drag.style.transform = ''; drop.classList.remove('hot');
+      say1.textContent = 'Почти. Отпустите иконку прямо над папкой «Программы».';
+    });
+    $('inst-auto').addEventListener('click', moved);
+    drag.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); moved(); } });
+
+    // 3. Первый запуск: в macOS 14 и 15 разный путь
+    const say2 = $('inst-say2'), segBtns = document.querySelectorAll('#install .os-seg button');
+    segBtns.forEach(b => b.addEventListener('click', () => {
+      segBtns.forEach(x => x.setAttribute('aria-pressed', x === b));
+      $('inst-os14').hidden = b.dataset.os !== '14';
+      $('inst-os15').style.display = b.dataset.os === '15' ? 'grid' : 'none';
+      $('inst-alert').hidden = true; $('inst-menu').hidden = false;
+    }));
+    $('inst-open1').addEventListener('click', () => { $('inst-menu').hidden = true; $('inst-alert').hidden = false; $('inst-open2').focus(); });
+    $('inst-cancel').addEventListener('click', () => { say2.textContent = 'Отменили. Karman не запустится, пока вы не нажмёте «Открыть».'; $('inst-alert').hidden = true; $('inst-menu').hidden = false; });
+    const allowed = () => { say2.innerHTML = '<b>Готово, больше macOS не спросит.</b>'; complete(2); };
+    $('inst-open2').addEventListener('click', () => { $('inst-alert').hidden = true; allowed(); });
+    $('inst-open3').addEventListener('click', allowed);
+
+    // 4. ⌥⌘V
+    const held = { alt: false, cmd: false, v: false }, instPanel = $('inst-panel');
+    let resetKeys;
+    function hit(k) {
+      held[k] = true;
+      pressKey(document.querySelector(`#install .kc[data-k="${k}"]`));
+      if (held.alt && held.cmd && held.v) {
+        instPanel.classList.remove('closed');
+        $('inst-done').classList.add('show');
+        $('inst-say3').textContent = 'Панель открылась. На Mac она появится у курсора.';
+        complete(3);
+        return;
+      }
+      clearTimeout(resetKeys);
+      resetKeys = setTimeout(() => Object.keys(held).forEach(x => held[x] = false), 2500);
+    }
+    document.querySelectorAll('#install .kc').forEach(c => c.addEventListener('click', () => hit(c.dataset.k)));
+    // На этом шаге ⌥⌘V принадлежит репетиции, а не панели первого экрана
+    addEventListener('keydown', e => {
+      if (current !== 3 || !(e.altKey && e.metaKey && e.code === 'KeyV')) return;
+      const r = $('install').getBoundingClientRect();
+      if (r.bottom < 0 || r.top > innerHeight) return;
+      e.preventDefault(); e.stopPropagation();
+      ['alt', 'cmd', 'v'].forEach(hit);
+    }, true);
+    go(0);
+  })();
+
+  // Живой QR: собирается волной от центра, иногда по нему проходит полоса сканера,
+  // точки у курсора сжимаются и подсвечиваются. В покое это обычный QR с иконкой по центру.
+  (() => {
+    const card = $('qrcard'), cv = $('qr');
+    if (!window.QRCode) { card.style.display = 'none'; return; }
+    const tmp = document.createElement('div');
+    const code = new QRCode(tmp, { text: 'https://t.me/Stack_Tools', width: 64, height: 64, correctLevel: QRCode.CorrectLevel.H })._oQRCode;
+    if (!code) { card.style.display = 'none'; return; }
+    const n = code.getModuleCount(), css = 200, dpr = Math.min(3, devicePixelRatio || 1);
+    cv.width = cv.height = css * dpr;
+    const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+    const cell = css / n, mid = (n - 1) / 2, maxD = Math.hypot(mid, mid);
+    const logo = Math.ceil(n * 0.22) | 1, l0 = Math.floor((n - logo) / 2);
+    const isFinder = (r, c) => (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7);
+    const underLogo = (r, c) => r >= l0 && r < l0 + logo && c >= l0 && c < l0 + logo;
+    const dots = [];
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+      if (!code.isDark(r, c) || underLogo(r, c)) continue;
+      dots.push({ x: (c + .5) * cell, y: (r + .5) * cell, finder: isFinder(r, c), delay: Math.hypot(r - mid, c - mid) / maxD * 700 });
+    }
+    const easeOut = t => 1 - Math.pow(1 - t, 3);
+    let born = null, scanAt = null, pointer = null, raf = 0, visible = false, idleTimer;
+
+    function draw(now) {
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, css, css);
+      let busy = false;
+      for (const d of dots) {
+        let k = 1;
+        if (born !== null) { const t = (now - born - d.delay) / 320; k = easeOut(Math.max(0, Math.min(1, t))); if (t < 1) busy = true; }
+        let near = 0;
+        if (pointer) near = Math.max(0, 1 - Math.hypot(d.x - pointer.x, d.y - pointer.y) / 46);
+        const size = cell * k * (1 - .38 * near) + .4;
+        ctx.fillStyle = near > .05 ? '#5b3bf5' : d.finder ? '#3a16d8' : '#111016';
+        ctx.fillRect(d.x - size / 2, d.y - size / 2, size, size);
+      }
+      // Иконка Karman в центре
+      const lx = l0 * cell, lw = logo * cell;
+      ctx.fillStyle = '#fff'; ctx.fillRect(lx - 2, lx - 2, lw + 4, lw + 4);
+      const g = ctx.createLinearGradient(lx, lx, lx + lw, lx + lw);
+      g.addColorStop(0, '#6f52ff'); g.addColorStop(1, '#3a16d8');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(lx + 1, lx + 1, lw - 2, lw - 2, lw * .22); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.roundRect(lx + lw * .28, lx + lw * .42, lw * .56, lw * .34, 2); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.roundRect(lx + lw * .22, lx + lw * .28, lw * .56, lw * .34, 2); ctx.fill();
+      // Полоса сканера
+      if (scanAt !== null) {
+        const t = (now - scanAt) / 1400;
+        if (t < 1) {
+          busy = true;
+          const y = easeOut(t) * (css + 30) - 15;
+          const band = ctx.createLinearGradient(0, y - 16, 0, y + 16);
+          band.addColorStop(0, 'rgba(139,108,255,0)'); band.addColorStop(.5, 'rgba(139,108,255,.45)'); band.addColorStop(1, 'rgba(139,108,255,0)');
+          ctx.fillStyle = band; ctx.fillRect(0, y - 16, css, 32);
+        } else scanAt = null;
+      }
+      if (born !== null && !busy) born = null;
+      raf = (busy || pointer) ? requestAnimationFrame(draw) : 0;
+    }
+    const kick = () => { if (!raf) raf = requestAnimationFrame(draw); };
+    const scheduleScan = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => { if (visible && !pointer) { scanAt = performance.now(); kick(); } scheduleScan(); }, 5000);
+    };
+
+    if (still) { draw(performance.now()); return; }
+    draw(performance.now());
+    let assembled = false;
+    new IntersectionObserver(([e]) => {
+      visible = e.isIntersecting;
+      if (visible && !assembled) { assembled = true; born = performance.now(); kick(); scheduleScan(); }
+    }, { threshold: 0.6 }).observe(cv);
+    if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      cv.addEventListener('pointermove', e => { const r = cv.getBoundingClientRect(); pointer = { x: (e.clientX - r.left) * css / r.width, y: (e.clientY - r.top) * css / r.height }; kick(); });
+      cv.addEventListener('pointerleave', () => { pointer = null; kick(); });
+    }
+  })();
+
+  // Футер: наверх и буквы KARMAN
+  $('to-top').addEventListener('click', () => {
+    scrollTo({ top: 0, behavior: still ? 'auto' : 'smooth' });
+    document.querySelector('.top .brand').focus({ preventScroll: true });
+  });
+  (() => {
+    const mark = $('mark'), letters = [...mark.children];
+    let played = false;
+    new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting || played) return;
+      played = true;
+      letters.forEach((l, i) => setTimeout(() => l.classList.add('lit'), still ? 0 : i * 110));
+      setTimeout(() => letters.forEach(l => l.classList.remove('lit')), still ? 0 : 2200);
+    }, { threshold: 0.6 }).observe(mark);
+    if (!matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+    mark.addEventListener('pointermove', e => {
+      letters.forEach(l => {
+        const r = l.getBoundingClientRect(), d = Math.abs(e.clientX - (r.left + r.width / 2)) / r.width;
+        l.classList.toggle('lit', d < .6);
+        l.classList.toggle('warm', d >= .6 && d < 1.6);
+      });
+    });
+    mark.addEventListener('pointerleave', () => letters.forEach(l => l.classList.remove('lit', 'warm')));
+  })();
+
+  // Номер версии берём из последнего релиза, чтобы не править руками
+  fetch('https://api.github.com/repos/Tool-vd40/karman/releases/latest')
+    .then(r => r.ok ? r.json() : null)
+    .then(r => {
+      if (!r?.tag_name) return;
+      const v = r.tag_name.replace(/^v/, '');
+      $('ver').textContent = v;
+      document.querySelectorAll('.ver-copy').forEach(el => el.textContent = v);
+      const dmg = r.assets?.find(a => a.name === 'Karman.dmg');
+      if (dmg) $('inst-size').textContent = (dmg.size / 1e6).toFixed(1).replace('.', ',') + ' МБ';
+    })
+    .catch(() => {});
+</script>
+</body>
+</html>
