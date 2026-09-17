@@ -531,7 +531,13 @@
   .foot-links a:hover { color: var(--text); }
   .foot-print { font-size: 13px; color: var(--dim); }
   .foot-print a { color: var(--dim); }
-  .stats { display: flex; flex-wrap: wrap; gap: 4px 20px; font-variant-numeric: tabular-nums; }
+  /* Счётчики в подвале: пилюли. Скачивания ведут на релизы, просмотры просто показывают число */
+  .stats { display: flex; flex-wrap: wrap; gap: 8px; font-variant-numeric: tabular-nums; }
+  .stat { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 14px; border: 1px solid var(--line); border-radius: 99px; background: var(--surface); color: var(--text); font-size: 13px; text-decoration: none; }
+  .stat[hidden] { display: none; }
+  .stat svg { width: 14px; height: 14px; color: var(--accent); flex: none; }
+  .foot-print a.stat { color: var(--text); transition: border-color .15s ease; }
+  a.stat:hover { border-color: var(--accent); }
   .to-top { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 99px; border: 1px solid var(--line); font-size: 14px; transition: border-color .15s ease; }
   .to-top:hover { border-color: var(--text); }
   .to-top:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -978,7 +984,10 @@
     </div>
     <div class="foot-row foot-print">
       <span>© 2026 Stack Tools. Все права защищены. <a href="https://github.com/Tool-vd40/karman/blob/main/LICENSE">Лицензия</a></span>
-      <span class="stats"><span id="downloads" hidden></span><span id="visits" hidden></span></span>
+      <span class="stats">
+        <a class="stat" id="downloads" href="https://github.com/Tool-vd40/karman/releases" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M6 10l6 6 6-6M4 21h16"/></svg><span></span></a>
+        <span class="stat" id="visits" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span></span></span>
+      </span>
       <span>Бесплатно для Mac</span>
     </div>
     <div class="mark" id="mark" aria-hidden="true"><span>K</span><span>A</span><span>R</span><span>M</span><span>A</span><span>N</span></div>
@@ -1584,9 +1593,10 @@
     mark.addEventListener('pointerleave', () => letters.forEach(l => l.classList.remove('lit', 'warm')));
   })();
 
-  const timesWord = n => {
+  const plural = (n, one, few, many) => {
     const a = n % 10, b = n % 100;
-    return a >= 2 && a <= 4 && (b < 12 || b > 14) ? 'раза' : 'раз';
+    if (b >= 11 && b <= 14) return many;
+    return a === 1 ? one : a >= 2 && a <= 4 ? few : many;
   };
 
   // Счётчик открытий сайта. Хранится в бесплатном Abacus (ключ живёт полгода с последнего обращения).
@@ -1602,7 +1612,7 @@
       .then(({ value }) => {
         if (!Number.isFinite(value) || value < 1) return;
         if (action === 'hit') { try { sessionStorage.setItem('karman-visit', '1'); } catch {} }
-        el.textContent = `Сайт открывали ${value.toLocaleString('ru-RU')} ${timesWord(value)}`;
+        el.lastElementChild.textContent = `${value.toLocaleString('ru-RU')} ${plural(value, 'просмотр', 'просмотра', 'просмотров')}`;
         el.hidden = false;
       })
       .catch(() => {});
@@ -1616,7 +1626,8 @@
       if (!Array.isArray(list)) return;
       const total = list.flatMap(x => x.assets || []).filter(a => a.name === 'Karman.dmg').reduce((n, a) => n + a.download_count, 0);
       if (total > 0) {
-        $('downloads').textContent = `Karman скачали ${total.toLocaleString('ru-RU')} ${timesWord(total)}`;
+        $('downloads').lastElementChild.textContent = `${total.toLocaleString('ru-RU')} ${plural(total, 'скачивание', 'скачивания', 'скачиваний')}`;
+        $('downloads').title = 'Скачивания Karman.dmg по всем версиям';
         $('downloads').hidden = false;
       }
       const r = list.find(x => !x.draft && !x.prerelease);
